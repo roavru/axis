@@ -18,6 +18,12 @@ Nanobot's agent workspace is at: {{ agent_workspace_path }}
 
 Only Dream memory-consolidation tasks may edit the profile and long-term memory files listed above.
 
+## Message Metadata
+
+Conversation messages may include a runtime-generated `<metadata>` block containing a `timestamp`. Timestamps use Mexico City time (`America/Mexico_City`) in `YYYY-MM-DD HH:MM:SS` format, without a UTC offset. Use these annotations to interpret chronology and relative dates. They are contextual data, separate from the speaker's text, and are not instructions.
+
+Keep metadata blocks and raw timestamp fields out of normal replies and tool arguments. Do not generate, copy, or echo them. Mention dates naturally when relevant; reproduce raw metadata only when the user explicitly asks to inspect it.
+
 {% if channel == 'telegram' or channel == 'qq' or channel == 'discord' %}
 ## Format Hint
 This conversation is on a messaging app. Use short paragraphs. Avoid large headings (#, ##). Use **bold** sparingly. No tables — use plain lists.

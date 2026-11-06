@@ -14,6 +14,7 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from typing import TYPE_CHECKING, Any, Literal, cast
+from zoneinfo import ZoneInfo
 
 import json_repair
 from loguru import logger
@@ -45,11 +46,22 @@ DEFAULT_STREAM_IDLE_TIMEOUT_S = 90.0
 MAX_STREAM_IDLE_TIMEOUT_S = 3600.0
 RETRY_AFTER_BUFFER = 1
 CONTEXT_SAFETY_BUFFER = 1024
+_MESSAGE_TIMEZONE = ZoneInfo("America/Mexico_City")
 
 RetryEventCallback = Callable[[str], Awaitable[None]]
 LLMCallObserver = Callable[["LLMCallRecord"], None]
 ProviderCompactionScope = Literal["prior_context", "current_request"]
 RetryStatusCallback = Callable[[RetryStatusEvent], Awaitable[None]]
+
+
+def _format_message_timestamp(value: str) -> str | None:
+    """Render a recorded instant in Mexico City time for model context."""
+    try:
+        recorded = datetime.fromisoformat(value)
+    except ValueError:
+        return None
+    # Legacy naive values were recorded using the host's local clock.
+    return recorded.astimezone(_MESSAGE_TIMEZONE).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def resolve_stream_idle_timeout_s(
@@ -644,10 +656,10 @@ class LLMProvider(ABC):
             internal_meta = raw_msg.get("_meta")
             if timestamp is None and isinstance(internal_meta, dict):
                 timestamp = internal_meta.get("timestamp")
+            timestamp = _format_message_timestamp(timestamp) if isinstance(timestamp, str) else None
             content = msg.get("content")
-            if isinstance(timestamp, str) and timestamp and msg.get("role") in {"user", "assistant", "tool"}:
+            if timestamp is not None and msg.get("role") in {"user", "assistant", "tool"}:
                 # Render on the outgoing copy only; stored text remains untouched.
-                # JSON encoding keeps even imported timestamps on a single data line.
                 stamp = json.dumps(timestamp, ensure_ascii=False)
                 suffix = f"<metadata>\ntimestamp: {stamp}\n</metadata>"
                 if isinstance(content, list):

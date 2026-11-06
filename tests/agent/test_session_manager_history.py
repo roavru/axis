@@ -177,8 +177,8 @@ def test_get_history_omits_persisted_summary_marker_after_reload(tmp_path):
     assert reloaded.messages[-1][HIDDEN_HISTORY_META] is True
     assert reloaded.get_history() == []
 
-    reloaded.add_message("user", "hi")
-    assert reloaded.get_history() == [{"role": "user", "content": "hi"}]
+    reloaded.add_message("user", "hi", timestamp="2026-11-06T17:00:00")
+    assert reloaded.get_history() == [{"role": "user", "content": "hi", "timestamp": "2026-11-06T17:00:00"}]
 
 
 def test_get_history_keeps_real_user_continuation_and_hidden_subagent_result():
