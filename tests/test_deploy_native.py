@@ -55,11 +55,15 @@ class NativeDeploymentTests(unittest.TestCase):
             soul = workspace / "SOUL.md"
             soul.write_text("Existing personality\n")
             output = io.StringIO()
+            serve = {"Web": {"debian.example.ts.net:8443": {"Handlers": {
+                "/": {"Proxy": "http://127.0.0.1:8765"},
+            }}}}
 
             with (
                 patch.object(deploy_native.Path, "home", return_value=home),
                 patch.object(deploy_native, "run") as run,
                 patch.object(deploy_native, "verify") as verify,
+                patch.object(deploy_native, "output", return_value=json.dumps(serve)),
                 redirect_stdout(output),
             ):
                 deploy_native.activate_server(deployment_payload())
@@ -78,6 +82,8 @@ class NativeDeploymentTests(unittest.TestCase):
             self.assertIn("Environment=TZ=America/Mexico_City", unit.read_text())
             self.assertIn("gateway --foreground --config", unit.read_text())
             run.assert_any_call(["systemctl", "--user", "enable", "--now", "axis.service"])
+            # An administrator configured Serve; this user cannot change its config.
+            self.assertFalse(any(call.args[0][:2] == ["tailscale", "serve"] for call in run.call_args_list))
             self.assertEqual(verify.call_count, 2)
 
 

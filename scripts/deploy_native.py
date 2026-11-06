@@ -214,7 +214,10 @@ def activate_server(payload: dict) -> None:
     run(["systemctl", "--user", "enable", "--now", "axis.service"])
     websocket_url = websocket["publicWsUrl"]
     verify(target, secret, websocket_url, seconds=60)
-    run(["tailscale", "serve", "--bg", "--https=8443", target])
+    serve = json.loads(output(["tailscale", "serve", "status", "--json"])) or {}
+    handlers = serve.get("Web", {}).get(address, {}).get("Handlers", {})
+    if handlers != {"/": {"Proxy": target}}:
+        run(["tailscale", "serve", "--bg", "--https=8443", target])
     print("Esperando HTTPS; el primer certificado puede tardar hasta dos minutos…", flush=True)
     verify(f"https://{address}", secret, websocket_url, seconds=120)
     access_file = state / "webui-access-url.txt"
