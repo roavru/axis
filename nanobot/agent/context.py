@@ -61,6 +61,7 @@ class TranscriptInput:
     current_message: str | None
     media: Sequence[str] | None = None
     current_role: str = "user"
+    timestamp: str | None = None
     session_summary: SessionSummary | None = None
     runtime_context_blocks: Sequence[RuntimeContextBlock] | None = None
 
@@ -286,6 +287,7 @@ class ContextBuilder:
                 transcript.current_message,
                 media=list(transcript.media) if transcript.media else None,
                 current_role=transcript.current_role,
+                timestamp=transcript.timestamp,
                 runtime_context_blocks=transcript.runtime_context_blocks,
             )
             messages.append(current)
@@ -297,6 +299,7 @@ class ContextBuilder:
         *,
         media: list[str] | None = None,
         current_role: str = "user",
+        timestamp: str | None = None,
         runtime_context_blocks: Sequence[RuntimeContextBlock] | None = None,
     ) -> dict[str, Any]:
         """Build only the fresh turn message without merging it into history."""
@@ -313,6 +316,8 @@ class ContextBuilder:
             current["_meta"] = {
                 RUNTIME_CONTEXT_MESSAGE_META: runtime_context_meta,
             }
+        if timestamp is not None:
+            current["timestamp"] = timestamp
         return current
 
     def build_user_content(

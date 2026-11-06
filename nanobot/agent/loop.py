@@ -757,6 +757,7 @@ class AgentLoop:
         return TranscriptInput(
             history=ctx.history,
             current_message=ctx.msg.content,
+            timestamp=ctx.msg.timestamp.isoformat(),
             media=ctx.msg.media if ctx.kind is TurnKind.USER and ctx.msg.media else None,
             session_summary=ctx.pending_summary,
             runtime_context_blocks=ctx.runtime_context_blocks,
@@ -2265,6 +2266,7 @@ class AgentLoop:
         ):
             current_provider_message = self.context.build_current_message(
                 ctx.msg.content,
+                timestamp=ctx.msg.timestamp.isoformat(),
                 media=ctx.msg.media if ctx.kind is TurnKind.USER and ctx.msg.media else None,
                 runtime_context_blocks=ctx.runtime_context_blocks,
             )

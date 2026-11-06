@@ -292,7 +292,7 @@ def test_get_history_preserves_reasoning_content():
     ]
 
 
-def test_get_history_does_not_inject_persisted_timestamps_into_replay_content():
+def test_get_history_preserves_timestamps_separately_from_replay_content():
     session = Session(key="test:timestamps")
     session.messages.append({
         "role": "user",
@@ -313,10 +313,12 @@ def test_get_history_does_not_inject_persisted_timestamps_into_replay_content():
         {
             "role": "user",
             "content": "10 点提醒是昨天发生的",
+            "timestamp": "2026-04-26T22:00:00",
         },
         {
             "role": "assistant",
             "content": "记下来了",
+            "timestamp": "2026-04-26T22:00:05",
         },
     ]
 
@@ -343,15 +345,17 @@ def test_get_history_keeps_proactive_delivery_timestamps_out_of_replay_content()
         {
             "role": "assistant",
             "content": "记得喝水",
+            "timestamp": "2026-04-26T15:00:00",
         },
         {
             "role": "user",
             "content": "好",
+            "timestamp": "2026-04-26T18:00:00",
         },
     ]
 
 
-def test_get_history_does_not_inject_tool_result_timestamps():
+def test_get_history_preserves_tool_result_timestamp_without_changing_content():
     session = Session(key="test:tool-timestamps")
     session.messages.append({"role": "user", "content": "run tool"})
     session.messages.extend(_tool_turn("ts", 0))
@@ -362,6 +366,7 @@ def test_get_history_does_not_inject_tool_result_timestamps():
     tool_result = history[-1]
     assert tool_result["role"] == "tool"
     assert tool_result["content"] == "ok"
+    assert tool_result["timestamp"] == "2026-04-26T22:00:10"
 
 
 def test_window_cuts_mid_tool_group():

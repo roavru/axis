@@ -640,7 +640,21 @@ class LLMProvider(ABC):
         result: list[dict[str, Any]] = []
         for raw_msg in messages:
             msg = {key: value for key, value in raw_msg.items() if key != "_meta"}
+            timestamp = msg.pop("timestamp", None)
+            internal_meta = raw_msg.get("_meta")
+            if timestamp is None and isinstance(internal_meta, dict):
+                timestamp = internal_meta.get("timestamp")
             content = msg.get("content")
+            if isinstance(timestamp, str) and timestamp and msg.get("role") in {"user", "assistant", "tool"}:
+                # Render on the outgoing copy only; stored text remains untouched.
+                # JSON encoding keeps even imported timestamps on a single data line.
+                stamp = json.dumps(timestamp, ensure_ascii=False)
+                suffix = f"<metadata>\ntimestamp: {stamp}\n</metadata>"
+                if isinstance(content, list):
+                    content = [*content, {"type": "text", "text": suffix}]
+                else:
+                    content = f"{content}\n\n{suffix}" if content else suffix
+                msg["content"] = content
 
             if isinstance(content, str) and not content:
                 clean = dict(msg)

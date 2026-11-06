@@ -5,6 +5,7 @@ import time
 from collections.abc import Awaitable, Callable, Iterable
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, ParamSpec, TypeVar, cast
 from uuid import uuid4
@@ -513,6 +514,7 @@ class AgentRunner:
                     assistant_message,
                     response,
                 )
+                assistant_message.setdefault("timestamp", datetime.now().astimezone().isoformat())
                 messages.append(assistant_message)
                 await self._emit_checkpoint(
                     spec,
@@ -544,6 +546,7 @@ class AgentRunner:
                         entry = completed_by_id.get(tool_call.id)
                         tool_message: dict[str, Any] = {
                             "role": "tool",
+                            "timestamp": datetime.now().astimezone().isoformat(),
                             "tool_call_id": tool_call.id,
                             "name": tool_call.name,
                         }
@@ -711,6 +714,7 @@ class AgentRunner:
                     assistant_message,
                     response,
                 )
+                assistant_message.setdefault("timestamp", datetime.now().astimezone().isoformat())
                 messages.append(assistant_message)
                 await self._emit_checkpoint(
                     spec,
