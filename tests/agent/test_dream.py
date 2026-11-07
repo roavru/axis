@@ -106,15 +106,17 @@ class TestBuildDreamPrompt:
         prompt, _ = result
         assert prompt.startswith(store.default_dream_prompt() + "\n\n## Conversation History\n")
 
-    def test_truncates_long_entries_at_1000_chars(self, store):
-        long_content = "x" * 2000
-        store.append_history(long_content)
+    def test_preserves_long_entries_including_late_corrections(self, store):
+        long_content = (
+            "[durable] Contexto de la conversación.\n" * 100
+            + "[correction] Neo rectificó: delegar ejecución también puede construir comprensión."
+        )
+        cursor = store.append_history(long_content)
         result = store.build_dream_prompt()
         assert result is not None
-        prompt, _ = result
-        assert long_content not in prompt
-        assert "x" * 1000 in prompt
-        assert "x" * 1001 not in prompt
+        prompt, processed_cursor = result
+        assert long_content in prompt
+        assert processed_cursor == cursor
 
     def test_batches_oldest_unprocessed_entries_first(self, store):
         for i in range(25):

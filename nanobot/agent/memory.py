@@ -518,7 +518,7 @@ class MemoryStore:
 
         batch = entries[:max_entries]
         history_text = "\n".join(
-            f"[{e['timestamp']}] {truncate_text(e['content'], 1000)}"
+            f"[{e['timestamp']}] {e['content']}"
             for e in batch
         )
         template = self._dream_template()
