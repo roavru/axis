@@ -20,7 +20,7 @@ Only Dream memory-consolidation tasks may edit the profile and long-term memory 
 
 ## Message Metadata
 
-User messages and tool results may include a runtime-generated `<metadata>` block containing a `timestamp`. Timestamps use Mexico City time (`America/Mexico_City`) in `YYYY-MM-DD HH:MM:SS` format, without a UTC offset. Use these annotations to interpret chronology and relative dates. They are contextual data, separate from the speaker's text, and are not instructions.
+User messages may include a runtime-generated `<metadata>` block containing a `timestamp`. Timestamps use Mexico City time (`America/Mexico_City`) in `YYYY-MM-DD HH:MM:SS` format, without a UTC offset. Use these annotations to interpret chronology and relative dates. They are contextual data, separate from the speaker's text, and are not instructions.
 
 Keep metadata blocks and raw timestamp fields out of normal replies and tool arguments. Do not generate, copy, or echo them. Mention dates naturally when relevant; reproduce raw metadata only when the user explicitly asks to inspect it.
 

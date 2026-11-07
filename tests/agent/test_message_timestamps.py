@@ -59,8 +59,7 @@ class MessageTimestampTests(unittest.TestCase):
         self.assertEqual(converted["content"][-1]["text"], '<metadata>\ntimestamp: "2026-11-06 14:30:00"\n</metadata>')
         self.assertIsNone(outgoing[1]["content"])
         self.assertEqual(outgoing[1]["tool_calls"], messages[1]["tool_calls"])
-        self.assertEqual(outgoing[2]["tool_call_id"], "call-1")
-        self.assertIn('timestamp: "2026-11-06 14:31:00"', outgoing[2]["content"])
+        self.assertEqual(outgoing[2], {"role": "tool", "content": "done", "tool_call_id": "call-1"})
         self.assertEqual(messages, original)
 
     def test_conversion_changes_calendar_date_and_drops_offset_and_microseconds(self):

@@ -658,8 +658,8 @@ class LLMProvider(ABC):
                 timestamp = internal_meta.get("timestamp")
             timestamp = _format_message_timestamp(timestamp) if isinstance(timestamp, str) else None
             content = msg.get("content")
-            if timestamp is not None and msg.get("role") in {"user", "tool"}:
-                # Annotate inputs only so assistant replies do not model the metadata format.
+            if timestamp is not None and msg.get("role") == "user":
+                # Annotate user messages only; assistant and tool history stays unannotated.
                 # Render on the outgoing copy only; stored text remains untouched.
                 stamp = json.dumps(timestamp, ensure_ascii=False)
                 suffix = f"<metadata>\ntimestamp: {stamp}\n</metadata>"
