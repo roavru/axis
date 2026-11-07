@@ -12,15 +12,16 @@ from nanobot.session.manager import Session
 
 
 class MessageTimestampTests(unittest.TestCase):
-    def test_history_preserves_each_date_without_changing_stored_text(self):
+    def test_history_preserves_user_dates_without_annotating_assistant_replies(self):
         session = Session(key="cli:dates")
         session.add_message("user", "Hola", timestamp="2026-11-05T10:00:00-06:00")
         session.add_message("assistant", "Hola también", timestamp="2026-11-05T10:00:03-06:00")
         original = deepcopy(session.messages)
         history = session.get_history()
         outgoing = LLMProvider._sanitize_empty_content(history)
-        for expected, rendered in zip(("2026-11-05 10:00:00", "2026-11-05 10:00:03"), outgoing):
-            self.assertTrue(rendered["content"].endswith(f'<metadata>\ntimestamp: "{expected}"\n</metadata>'))
+        self.assertEqual(outgoing[0]["content"], 'Hola\n\n<metadata>\ntimestamp: "2026-11-05 10:00:00"\n</metadata>')
+        self.assertEqual(outgoing[1]["content"], "Hola también")
+        for rendered in outgoing:
             self.assertNotIn("timestamp", rendered)
         self.assertEqual(session.messages, original)
         self.assertEqual(LLMProvider._sanitize_empty_content(history), outgoing)
@@ -44,6 +45,11 @@ class MessageTimestampTests(unittest.TestCase):
         image = {"type": "image_url", "image_url": {"url": "data:image/png;base64,AAAA"}}
         messages = [
             {"role": "user", "content": [image], "timestamp": "2026-11-06T20:30:00+00:00"},
+            {
+                "role": "assistant", "content": None,
+                "tool_calls": [{"id": "call-1", "type": "function", "function": {"name": "read_file", "arguments": "{}"}}],
+                "_meta": {"timestamp": "2026-11-06T20:30:30+00:00"},
+            },
             {"role": "tool", "content": "done", "tool_call_id": "call-1", "timestamp": "2026-11-06T20:31:00+00:00"},
         ]
         original = deepcopy(messages)
@@ -51,8 +57,10 @@ class MessageTimestampTests(unittest.TestCase):
         converted = convert_user_message(outgoing[0]["content"])
         self.assertEqual(converted["content"][0]["type"], "input_image")
         self.assertEqual(converted["content"][-1]["text"], '<metadata>\ntimestamp: "2026-11-06 14:30:00"\n</metadata>')
-        self.assertEqual(outgoing[1]["tool_call_id"], "call-1")
-        self.assertIn('timestamp: "2026-11-06 14:31:00"', outgoing[1]["content"])
+        self.assertIsNone(outgoing[1]["content"])
+        self.assertEqual(outgoing[1]["tool_calls"], messages[1]["tool_calls"])
+        self.assertEqual(outgoing[2]["tool_call_id"], "call-1")
+        self.assertIn('timestamp: "2026-11-06 14:31:00"', outgoing[2]["content"])
         self.assertEqual(messages, original)
 
     def test_conversion_changes_calendar_date_and_drops_offset_and_microseconds(self):
@@ -62,7 +70,7 @@ class MessageTimestampTests(unittest.TestCase):
         ):
             with self.subTest(timestamp=timestamp):
                 outgoing = LLMProvider._sanitize_empty_content([
-                    {"role": "assistant", "content": "Hola", "timestamp": timestamp},
+                    {"role": "user", "content": "Hola", "timestamp": timestamp},
                 ])
                 self.assertEqual(outgoing[0]["content"], f'Hola\n\n<metadata>\ntimestamp: "{expected}"\n</metadata>')
 
