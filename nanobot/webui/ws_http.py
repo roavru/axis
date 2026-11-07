@@ -167,6 +167,9 @@ class _WebUIThreadDiagnostics:
     event_loop_lag_ms: float = 0.0
 
 _WEBUI_MUTATION_PATHS = {
+    "settings.push.subscribe": "/api/push/subscribe",
+    "settings.push.unsubscribe": "/api/push/unsubscribe",
+    "settings.push.test": "/api/push/test",
     "remote.discover": "/api/remote-instances/discover",
     "remote.pair_start": "/api/remote-instances/pair_start",
     "remote.pair_preview": "/api/remote-instances/pair_preview",
@@ -404,6 +407,9 @@ class GatewayHTTPHandler:
         self.ingress = ingress
         self.workspaces = workspaces
         self.settings = settings
+        from nanobot.webui.push import WebPushService
+
+        self.push = WebPushService(settings.config.path.parent / "webui" / "push")
         from nanobot.webui.remote_instances import RemoteInstances
 
         self.remote_instances = RemoteInstances(
@@ -519,6 +525,8 @@ class GatewayHTTPHandler:
         return _http_error(404, "WebUI mutation action not found")
 
     def _is_webui_mutation_path(self, path: str) -> bool:
+        if path.startswith("/api/push/"):
+            return True
         if path.startswith("/api/remote-instances/"):
             return True
         if self.settings_routes.is_mutation_path(path):
@@ -571,6 +579,34 @@ class GatewayHTTPHandler:
         request: WsRequest,
         got: str,
     ) -> Any | None:
+        if got == "/api/push" or got.startswith("/api/push/"):
+            if not self.check_api_token(request):
+                return _http_error(401, "Unauthorized")
+            try:
+                if got == "/api/push":
+                    _, query = _parse_request_path(request.path)
+                    identifier = _query_first(query, "id") or ""
+                    return _http_json_response({"public_key": self.push.public_key(),
+                                                "registered": self.push.has_subscription(identifier)},
+                                               extra_headers=_NO_STORE_HEADERS)
+                payload = _mutation_payload(request)
+                if payload is None:
+                    return _http_error(405, "Use an authenticated WebSocket")
+                if got == "/api/push/subscribe":
+                    identifier = self.push.subscribe(payload, request.headers.get("Origin", ""))
+                    return _http_json_response({"id": identifier}, extra_headers=_NO_STORE_HEADERS)
+                identifier = payload.get("id")
+                if not isinstance(identifier, str) or len(identifier) != 64:
+                    return _http_error(400, "Invalid push device")
+                if got == "/api/push/unsubscribe":
+                    self.push.unsubscribe(identifier)
+                elif got == "/api/push/test":
+                    self.push.test(identifier)
+                else:
+                    return _http_error(404, "API route not found")
+                return _http_json_response({"queued": True}, extra_headers=_NO_STORE_HEADERS)
+            except ValueError as exc:
+                return _http_error(400, str(exc))
         if got == "/api/remote-instances" or got.startswith("/api/remote-instances/"):
             return await self._dispatch_remote_instances(connection, request, got)
         if self.config.token_issue_path:

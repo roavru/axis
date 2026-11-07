@@ -26,6 +26,7 @@ import {
 import { providerFormFromRow } from "@/components/settings/models/providerForm";
 import { AboutSettings, AppearanceSettings, OverviewSettings } from "@/components/settings/overview/OverviewSettings";
 import { NotificationSettings } from "@/components/settings/notifications/NotificationSettings";
+import { PushNotificationSettings } from "@/components/settings/notifications/PushNotificationSettings";
 import { SettingsSidebar, standaloneSectionTitle } from "@/components/settings/SettingsSidebar";
 import {
   NanobotFeatureInstallDialog,
@@ -269,7 +270,8 @@ export function SettingsPage({
       case "about":
         return <AboutSettings settings={settings} />;
       case "notifications":
-        return <NotificationSettings localPrefs={localPrefs} onChangeLocalPrefs={setLocalPrefs} />;
+        return <NotificationSettings localPrefs={localPrefs} onChangeLocalPrefs={setLocalPrefs}
+          pushControls={<PushNotificationSettings />} />;
       case "models":
         return (
           <div className="settings-stack">

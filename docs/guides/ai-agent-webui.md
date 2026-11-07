@@ -40,6 +40,14 @@ When the WebUI is in the background, browser notifications tell you when a task 
 
 Keep the page open and connected, and use HTTPS or localhost. On iPhone or iPad, open the web app from the Home Screen. If your browser cannot enable notifications, follow the guidance shown in Settings.
 
+### Background notifications
+
+To receive alerts when the page is closed, open **Settings → Notifications** and enable **Background notifications** on each device. Allow the browser's permission request, then use the test button beside that switch. On iPhone or iPad, first add the web app to the Home Screen and open it from its icon. Reload the WebUI after updating so its service worker can receive push messages.
+
+The server sends encrypted Web Push through your browser's push service. The gateway can remain private inside your tailnet; it does not need Tailscale Funnel or a public inbound port. Receiving an alert requires internet access; opening its chat still requires access to the gateway. Browser or operating-system restrictions, a fully stopped browser, Focus settings, or a sleeping computer may delay or suppress alerts.
+
+Alerts contain generic task status and a chat link, never conversation text, file contents, or email previews. Temporary chats do not register background alerts. Subscriptions, the signing key and pending retries are stored privately under `<config-dir>/webui/push/`; include that directory in backups. The server retries transient failures for up to 24 hours, removes expired subscriptions, and retains duplicate receipts for 24 hours. Disabling the switch removes this device's subscription and pending alerts.
+
 ## Production notes
 
 - Use `nanobot gateway --background` when you do not want to keep a terminal open, then open the configured WebUI URL in a browser.

@@ -1,13 +1,14 @@
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 import { useTranslation } from "react-i18next";
 import { SettingsGroup, SettingsRow, SettingsSectionTitle } from "@/components/settings/shared/SettingsControls";
 import { ToggleButton } from "@/components/ui/toggle-button";
 import type { LocalPreferences } from "@/lib/local-preferences";
 import { BrowserNotificationSettings } from "./BrowserNotificationSettings";
 
-export function NotificationSettings({ localPrefs, onChangeLocalPrefs }: {
+export function NotificationSettings({ localPrefs, onChangeLocalPrefs, pushControls }: {
   localPrefs: LocalPreferences;
   onChangeLocalPrefs: Dispatch<SetStateAction<LocalPreferences>>;
+  pushControls?: ReactNode;
 }) {
   const { t } = useTranslation();
   return (
@@ -15,6 +16,7 @@ export function NotificationSettings({ localPrefs, onChangeLocalPrefs }: {
       <section>
         <SettingsSectionTitle>{t("settings.notifications.scope")}</SettingsSectionTitle>
         <SettingsGroup>
+          {pushControls}
           <BrowserNotificationSettings localPrefs={localPrefs} onChangeLocalPrefs={onChangeLocalPrefs} />
           <div className="settings-list-inset" aria-hidden="true">
             <div className="border-t border-border/40" />

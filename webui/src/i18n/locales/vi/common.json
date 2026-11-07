@@ -617,7 +617,12 @@
     "notifications": {
       "scope": "Trình duyệt này",
       "intro": "Chọn cách nhận thông báo khi tác vụ kết thúc.",
-      "pageRequired": "Không nhận được thông báo mới khi trang này bị đóng, tạm ngưng hoặc mất kết nối.",
+      "pageRequired": "Thông báo cục bộ cần trang duy trì kết nối. Thông báo nền có thể đến khi trang đã đóng.",
+      "pushTitle": "Thông báo nền",
+      "pushDescription": "Nhận thông báo ngay cả khi trang đã đóng. Bật trên từng thiết bị; trên iPhone, dùng ứng dụng đã thêm vào Màn hình chính.",
+      "pushUnsupported": "Cần HTTPS, trình duyệt tương thích và máy chủ hỗ trợ thông báo nền.",
+      "pushFailed": "Không thể cập nhật thông báo. Kiểm tra quyền và kết nối rồi thử lại.",
+      "pushQueued": "Đã xếp hàng kiểm tra. Hãy xem thông báo trên thiết bị.",
       "revoked": "Quyền thông báo đã bị thu hồi. Thông báo hiện đã tắt. Hãy cho phép thông báo trong cài đặt trang web của trình duyệt này, rồi bật tại đây.",
       "retry": "Kiểm tra lại",
       "statusOff": "Đã tắt",

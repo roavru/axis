@@ -91,6 +91,10 @@ export interface WebUIMutationTransport {
   ): Promise<T>;
 }
 
+export function fetchPushConfiguration(token: string, id: string) {
+  return request<{ public_key: string; registered: boolean }>(`/api/push?id=${encodeURIComponent(id)}`, token, undefined, API_READ_TIMEOUT_MS);
+}
+
 async function request<T>(
   url: string,
   token: string,

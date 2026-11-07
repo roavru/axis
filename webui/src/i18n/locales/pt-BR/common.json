@@ -672,7 +672,12 @@
     "notifications": {
       "scope": "Este navegador",
       "intro": "Escolha como receber um aviso quando uma tarefa terminar.",
-      "pageRequired": "Sem novos alertas se esta página estiver fechada, suspensa ou desconectada.",
+      "pageRequired": "Avisos locais exigem esta página conectada. Notificações em segundo plano podem chegar com ela fechada.",
+      "pushTitle": "Notificações em segundo plano",
+      "pushDescription": "Receba avisos mesmo com esta página fechada. Ative em cada dispositivo; no iPhone, use o app adicionado à Tela de Início.",
+      "pushUnsupported": "Requer HTTPS, um navegador compatível e um servidor com suporte a notificações em segundo plano.",
+      "pushFailed": "Não foi possível atualizar as notificações. Verifique a permissão e a conexão e tente novamente.",
+      "pushQueued": "Teste na fila. Confira as notificações do dispositivo.",
       "revoked": "A permissão para notificações foi revogada. Os avisos agora estão desativados. Permita notificações nas configurações deste site no navegador e depois ative-as aqui.",
       "retry": "Verificar novamente",
       "statusOff": "Desativadas",

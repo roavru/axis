@@ -558,3 +558,30 @@ describe("service worker", () => {
     expect(await response.text()).toContain("assets/index-v2.js");
   });
 });
+
+describe("background push", () => {
+  it("displays a server alert without any open page and opens the correct chat", async () => {
+    const sw = loadSw();
+    const url = `${ORIGIN}/#/chat/websocket%3Amy-chat`;
+    await sw.fire("push", { data: { json: () => ({ key: "push-1", url, body: "Finished" }) } });
+    expect(sw.showNotification).toHaveBeenCalledWith("nanobot", expect.objectContaining({
+      body: "Finished", tag: "push-1", data: { url, clientId: undefined },
+    }));
+    await sw.fire("notificationclick", { notification: { close: vi.fn(), data: { url } } });
+    expect(sw.openWindow).toHaveBeenCalledWith(url);
+  });
+
+  it("displays user-visible push even with a visible page", async () => {
+    const sw = loadSw();
+    sw.matchClients.mockResolvedValue([{ visibilityState: "visible" }]);
+    await sw.fire("push", { data: { json: () => ({ key: "push-visible", url: `${ORIGIN}/#/chat/a`, body: "Finished" }) } });
+    expect(sw.showNotification).toHaveBeenCalledOnce();
+  });
+
+  it("rejects push links to another origin and malformed payloads", async () => {
+    const sw = loadSw();
+    await sw.fire("push", { data: { json: () => ({ key: "bad", url: "https://evil.test/#/chat/a", body: "Finished" }) } });
+    await sw.fire("push", { data: { json: () => { throw new Error("invalid JSON"); } } });
+    expect(sw.showNotification).not.toHaveBeenCalled();
+  });
+});

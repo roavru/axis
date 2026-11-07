@@ -617,7 +617,12 @@
     "notifications": {
       "scope": "Ce navigateur",
       "intro": "Choisissez comment recevoir une alerte à la fin d’une tâche.",
-      "pageRequired": "Aucune nouvelle alerte si cette page est fermée, suspendue ou déconnectée.",
+      "pageRequired": "Les alertes locales nécessitent une page connectée. Les notifications en arrière-plan peuvent arriver après sa fermeture.",
+      "pushTitle": "Notifications en arrière-plan",
+      "pushDescription": "Recevez des alertes même si cette page est fermée. Activez-les sur chaque appareil ; sur iPhone, utilisez l’app ajoutée à l’écran d’accueil.",
+      "pushUnsupported": "Nécessite HTTPS, un navigateur compatible et un serveur prenant en charge les notifications en arrière-plan.",
+      "pushFailed": "Impossible de modifier les notifications. Vérifiez les autorisations et la connexion, puis réessayez.",
+      "pushQueued": "Test mis en attente. Consultez les notifications de votre appareil.",
       "revoked": "L’autorisation d’afficher des notifications a été révoquée. Les notifications sont désormais désactivées. Autorisez-les dans les paramètres du navigateur pour ce site, puis activez-les ici.",
       "retry": "Vérifier à nouveau",
       "statusOff": "Désactivées",

@@ -864,7 +864,12 @@
     "notifications": {
       "scope": "This browser",
       "intro": "Choose how to be notified when a task finishes.",
-      "pageRequired": "No new alerts when this page is closed, suspended, or disconnected.",
+      "pageRequired": "Local alerts require this page to stay connected. Background notifications can arrive while it is closed.",
+      "pushTitle": "Background notifications",
+      "pushDescription": "Receive alerts even when this page is closed. Enable on each device; on iPhone, use the app added to your Home Screen.",
+      "pushUnsupported": "Requires HTTPS, a compatible browser, and a host with background notification support.",
+      "pushFailed": "Could not update notifications. Check your permission and connection, then try again.",
+      "pushQueued": "Test queued. Check your device notifications.",
       "revoked": "Notification permission was revoked. Notifications are now off. Allow notifications in this browser’s site settings, then turn them on here.",
       "retry": "Check again",
       "statusOff": "Off",

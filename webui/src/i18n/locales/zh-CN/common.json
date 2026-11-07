@@ -864,7 +864,12 @@
     "notifications": {
       "scope": "本浏览器",
       "intro": "选择任务结束时的提醒方式。",
-      "pageRequired": "页面关闭、挂起或断开连接后，无法接收新提醒。",
+      "pageRequired": "本地提醒需要页面保持连接。后台通知可在页面关闭后送达。",
+      "pushTitle": "后台通知",
+      "pushDescription": "关闭页面后仍接收提醒。请在每台设备上启用；iPhone 请使用添加到主屏幕的应用。",
+      "pushUnsupported": "需要 HTTPS、兼容的浏览器和支持后台通知的服务器。",
+      "pushFailed": "无法更新通知。请检查权限和连接后重试。",
+      "pushQueued": "测试已排队，请查看设备通知。",
       "revoked": "通知权限已撤销，已关闭提醒。请先在浏览器站点设置中允许通知，再在此开启。",
       "retry": "重新检查",
       "statusOff": "未开启",

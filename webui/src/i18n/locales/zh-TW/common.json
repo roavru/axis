@@ -617,7 +617,12 @@
     "notifications": {
       "scope": "此瀏覽器",
       "intro": "選擇任務結束時的提醒方式。",
-      "pageRequired": "頁面關閉、暫停或中斷連線後，無法接收新提醒。",
+      "pageRequired": "本機提醒需要頁面保持連線。背景通知可在頁面關閉後送達。",
+      "pushTitle": "背景通知",
+      "pushDescription": "關閉頁面後仍接收提醒。請在每台裝置上啟用；iPhone 請使用加入主畫面的應用程式。",
+      "pushUnsupported": "需要 HTTPS、相容的瀏覽器與支援背景通知的伺服器。",
+      "pushFailed": "無法更新通知。請檢查權限和連線後重試。",
+      "pushQueued": "測試已排入佇列，請查看裝置通知。",
       "revoked": "通知權限已撤銷，已關閉提醒。請先在瀏覽器的網站設定中允許通知，再於此處開啟。",
       "retry": "重新檢查",
       "statusOff": "未開啟",

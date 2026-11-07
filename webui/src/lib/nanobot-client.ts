@@ -280,6 +280,14 @@ export class NanobotClient {
     return this.status_;
   }
 
+  get gatewayOrigin(): string | null {
+    try {
+      const url = new URL(this.currentUrl, window.location.href);
+      if (url.protocol !== "ws:" && url.protocol !== "wss:") return null;
+      return `${url.protocol === "wss:" ? "https:" : "http:"}//${url.host}`;
+    } catch { return null; }
+  }
+
   get defaultChatId(): string | null {
     return this.readyChatId;
   }

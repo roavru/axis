@@ -32,6 +32,7 @@ function notificationTarget(value) {
 }
 
 async function notifyClient(source, data) {
+  const push = source === null;
   const url = notificationTarget(data.url);
   if (!url || typeof data.key !== "string" || data.key.length > 2048 || typeof data.body !== "string" || data.body.length > 300) return "displayFailed";
   // One worker serializes all tabs. Retain bounded receipts even after a
@@ -43,13 +44,15 @@ async function notifyClient(source, data) {
     } catch { noticeReceipts = []; }
   }
   noticeReceipts = noticeReceipts.filter((item) => item.time > Date.now() - 86_400_000);
-  if (noticeReceipts.some((item) => item.key === data.key)) return "skipped";
+  if (!push && noticeReceipts.some((item) => item.key === data.key)) return "skipped";
   const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
-  const visible = !data.test && windows.some((client) => client.visibilityState === "visible");
+  // Web Push must display a notification, including when a window is visible.
+  // Reusing the tag replaces an existing local alert without renotifying.
+  const visible = !push && !data.test && windows.some((client) => client.visibilityState === "visible");
   if (!visible) {
     await self.registration.showNotification("nanobot", {
       body: data.body, tag: data.key, icon: "/brand/nanobot_icon_192.png",
-      data: { url, clientId: source.id },
+      data: { url, clientId: source?.id },
     });
   }
   noticeReceipts = [...noticeReceipts, { key: data.key, time: Date.now() }].slice(-256);
@@ -72,6 +75,15 @@ self.addEventListener("message", (event) => {
     (result) => event.ports[0]?.postMessage(result),
     () => event.ports[0]?.postMessage("displayFailed"),
   ));
+});
+
+self.addEventListener("push", (event) => {
+  let data;
+  try { data = event.data?.json(); } catch { return; }
+  if (!data || typeof data !== "object") return;
+  const work = noticeQueue.then(() => notifyClient(null, data));
+  noticeQueue = work.then(() => undefined, () => undefined);
+  event.waitUntil(work);
 });
 
 self.addEventListener("notificationclick", (event) => {

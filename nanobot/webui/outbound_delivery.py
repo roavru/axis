@@ -55,6 +55,7 @@ from nanobot.webui.outbound_wire import (
     project_notification,
     project_tool_events,
 )
+from nanobot.webui.push import WebPushService
 from nanobot.webui.session_identity import webui_session_key
 from nanobot.webui.session_projection import WebUISessionProjection
 from nanobot.webui.temporary_chats import WebUITemporaryChats
@@ -94,12 +95,14 @@ class WebUIOutboundDelivery:
         transcripts: WebUITranscriptRecorder,
         temporary_chats: WebUITemporaryChats,
         session_projection: WebUISessionProjection,
+        push: WebPushService | None = None,
     ) -> None:
         self._transport = transport
         self._media = media
         self._transcripts = transcripts
         self._temporary_chats = temporary_chats
         self._session_projection = session_projection
+        self._push = push
         self._stream_text_buffers: dict[tuple[str, str], list[str]] = {}
         self._reasoning_text_buffers: dict[tuple[str, str], list[str]] = {}
 
@@ -530,6 +533,8 @@ class WebUIOutboundDelivery:
                 clear_websocket_turn_if_current(chat_id, turn_owner)
             self.discard(chat_id)
         await self._fanout(recipients, body, label=f" {body['event']} ")
+        if self._push is not None and self._temporary_chats.should_persist_transcript(chat_id):
+            self._push.enqueue_notice(body)
 
     async def _send_goal_state(self, chat_id: str, blob: dict[str, Any]) -> None:
         recipients = self._transport.webui_recipients(ChatAudience(chat_id))

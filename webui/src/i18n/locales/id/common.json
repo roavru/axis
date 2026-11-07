@@ -617,7 +617,12 @@
     "notifications": {
       "scope": "Browser ini",
       "intro": "Pilih cara menerima notifikasi saat tugas selesai.",
-      "pageRequired": "Notifikasi baru tidak diterima jika halaman ditutup, ditangguhkan, atau terputus.",
+      "pageRequired": "Pemberitahuan lokal memerlukan halaman tetap terhubung. Notifikasi latar belakang dapat tiba saat halaman ditutup.",
+      "pushTitle": "Notifikasi latar belakang",
+      "pushDescription": "Terima pemberitahuan meski halaman ditutup. Aktifkan di setiap perangkat; di iPhone, gunakan aplikasi yang ditambahkan ke Layar Utama.",
+      "pushUnsupported": "Memerlukan HTTPS, browser yang kompatibel, dan server yang mendukung notifikasi latar belakang.",
+      "pushFailed": "Tidak dapat memperbarui notifikasi. Periksa izin dan koneksi, lalu coba lagi.",
+      "pushQueued": "Tes masuk antrean. Periksa notifikasi perangkat Anda.",
       "revoked": "Izin notifikasi telah dicabut. Notifikasi kini dinonaktifkan. Izinkan notifikasi di pengaturan situs pada browser ini, lalu aktifkan di sini.",
       "retry": "Periksa lagi",
       "statusOff": "Nonaktif",

@@ -372,6 +372,7 @@ class WebSocketChannel(BaseChannel):
             transcripts=gateway.transcripts,
             temporary_chats=gateway.temporary_chats,
             session_projection=gateway.session_projection,
+            push=gateway.http.push,
         )
         self._commands = WebUICommandRouter(self, gateway, outbound=self._outbound)
         self._webui_request_tasks = self._commands.request_tasks
@@ -637,6 +638,7 @@ class WebSocketChannel(BaseChannel):
             )
 
     async def start(self) -> None:
+        self.gateway.http.push.start()
         self.gateway.http.remote_instances.resume()
         from nanobot.utils.logging_bridge import redirect_lib_logging
 
@@ -882,6 +884,7 @@ class WebSocketChannel(BaseChannel):
 
 
     async def stop(self) -> None:
+        await self.gateway.http.push.close()
         await self.gateway.http.remote_instances.close()
         server_task = self._server_task
         if (
