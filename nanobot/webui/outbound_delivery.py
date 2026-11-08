@@ -35,6 +35,7 @@ from nanobot.session.webui_turns import (
 from nanobot.webui.media_gateway import WebUIMediaGateway
 from nanobot.webui.metadata import (
     WEBSOCKET_TURN_OWNER_METADATA_KEY,
+    WEBUI_REPLY_CONNECTION_METADATA_KEY,
     WEBUI_RESTART_CONTROL_METADATA_KEY,
     WEBUI_SYSTEM_COMMAND_TURN_PREFIX,
     WEBUI_TURN_METADATA_KEY,
@@ -59,7 +60,11 @@ from nanobot.webui.push import WebPushService
 from nanobot.webui.session_identity import webui_session_key
 from nanobot.webui.session_projection import WebUISessionProjection
 from nanobot.webui.temporary_chats import WebUITemporaryChats
-from nanobot.webui.transcript import WEBUI_TRANSCRIPT_INCOMPLETE_KEY, WebUITranscriptRecorder
+from nanobot.webui.transcript import (
+    WEBUI_TRANSCRIPT_INCOMPLETE_KEY,
+    WebUITranscriptRecorder,
+    webui_message_source,
+)
 
 if TYPE_CHECKING:
     from websockets.asyncio.server import ServerConnection
@@ -534,7 +539,10 @@ class WebUIOutboundDelivery:
             self.discard(chat_id)
         await self._fanout(recipients, body, label=f" {body['event']} ")
         if self._push is not None and self._temporary_chats.should_persist_transcript(chat_id):
-            self._push.enqueue_notice(body)
+            reply = (metadata or {}).get(WEBUI_REPLY_CONNECTION_METADATA_KEY)
+            self._push.enqueue_notice(body, reply_connection=(
+                reply if isinstance(reply, str) and webui_message_source(metadata) is None else None
+            ))
 
     async def _send_goal_state(self, chat_id: str, blob: dict[str, Any]) -> None:
         recipients = self._transport.webui_recipients(ChatAudience(chat_id))

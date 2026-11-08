@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 import pytest
 
@@ -20,6 +21,7 @@ from nanobot.runtime_context import public_history_message
 from nanobot.session.keys import UNIFIED_SESSION_KEY, session_key_for_channel
 from nanobot.session.manager import SessionManager
 from nanobot.session.webui_turns import clear_websocket_turns
+from nanobot.webui.metadata import WEBUI_REPLY_CONNECTION_METADATA_KEY
 
 
 class _Provider(LLMProvider):
@@ -39,6 +41,7 @@ class _Connection:
     remote_address = None
 
     def __init__(self) -> None:
+        self.id = uuid4()
         self.sent: list[dict[str, Any]] = []
 
     async def send(self, raw: str) -> None:
@@ -105,6 +108,7 @@ async def runtime(request: pytest.FixtureRequest, tmp_path: Path) -> AsyncIterat
 async def test_webui_admission_executes_with_the_routed_session(runtime: _Runtime) -> None:
     for chat_id in ("chat-a", "chat-b"):
         message = await runtime.message(chat_id)
+        assert message.metadata[WEBUI_REPLY_CONNECTION_METADATA_KEY] == str(runtime.connection.id)
         await runtime.execute(message)
 
         key = session_key_for_channel(

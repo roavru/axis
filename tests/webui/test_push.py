@@ -16,7 +16,11 @@ from nanobot.bus.queue import MessageBus
 from nanobot.channels.websocket.runtime import WebSocketChannel, WebSocketConfig
 from nanobot.session.manager import SessionManager
 from nanobot.webui.gateway_services import build_gateway_services
-from nanobot.webui.metadata import WEBUI_TURN_METADATA_KEY
+from nanobot.webui.metadata import (
+    WEBUI_MESSAGE_SOURCE_METADATA_KEY,
+    WEBUI_REPLY_CONNECTION_METADATA_KEY,
+    WEBUI_TURN_METADATA_KEY,
+)
 from nanobot.webui.push import WebPushService, notice_identity, validate_subscription
 
 ORIGIN = "https://axis.example.test:8443"
@@ -146,6 +150,27 @@ async def test_returning_to_app_consumes_pending_retries(tmp_path, registration,
     assert rows(service, "SELECT done,attempts FROM outbox") == [(1, 1)]
 
 
+@pytest.mark.asyncio
+async def test_pc_without_push_silences_its_replies_but_not_other_alerts(tmp_path, registration, monkeypatch):
+    service = WebPushService(tmp_path)
+    service.subscribe(registration, ORIGIN)
+    pc = MagicMock(state=State.OPEN, id="pc-connection")
+    service.set_presence(pc, None, True, ORIGIN)
+    event = {"event": "turn_end", "chat_id": "chat", "turn_id": "pc-reply"}
+    service.enqueue_notice(event, reply_connection=pc.id)
+    service.enqueue_notice({**event, "turn_id": "cron"})
+    service.enqueue_notice({**event, "turn_id": "other-reply"}, reply_connection="other-connection")
+    sent = []
+    monkeypatch.setattr(service, "_send", lambda *args: sent.append(json.loads(args[1])) or 201)
+    await service._drain()
+    assert len(sent) == 2
+    assert all("reply_connection" not in notice for notice in sent)
+    service.set_presence(pc, None, False, ORIGIN)
+    service.enqueue_notice({**event, "turn_id": "pc-hidden"}, reply_connection=pc.id)
+    await service._drain()
+    assert len(sent) == 3
+
+
 @pytest.mark.parametrize("endpoint", [
     "http://fcm.googleapis.com/send/x", "https://127.0.0.1/private",
     "https://fcm.googleapis.com.evil.test/send/x", "https://user@fcm.googleapis.com/send/x",
@@ -194,6 +219,9 @@ async def test_push_http_requires_auth_and_mutations_use_websocket(tmp_path, reg
     response = await gateway.http.dispatch_webui_mutation(connection, "settings.push.presence", {"id": identifier, "visible": True})
     assert response.status_code == 200
     assert gateway.http.push._device_visible(identifier)
+    response = await gateway.http.dispatch_webui_mutation(connection, "settings.push.presence", {"id": None, "visible": True})
+    assert response.status_code == 200
+    assert gateway.http.push._device_visible(identifier, str(connection.id))
     response = await gateway.http.dispatch_webui_mutation(connection, "settings.push.presence", {"id": identifier, "visible": "false"})
     assert response.status_code == 400
     connection.request = Request("/", Headers({"Origin": "https://another.test"}))
@@ -223,6 +251,31 @@ async def test_completed_turn_enqueues_push_without_websocket_subscribers(tmp_pa
         event=TurnEndEvent(), metadata={WEBUI_TURN_METADATA_KEY: "turn-1"}))
     assert len(rows(gateway.http.push, "SELECT id FROM outbox")) == 1
     assert rows(gateway.http.push, "SELECT done FROM outbox") == [(0,)]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("source", [None, "cron", "local_trigger"])
+async def test_automation_delivery_does_not_inherit_pc_reply_suppression(tmp_path, registration, source):
+    bus = MessageBus()
+    sessions = SessionManager(tmp_path / "workspace")
+    sessions.save(sessions.get_or_create("websocket:my-chat"))
+    config = WebSocketConfig()
+    gateway = build_gateway_services(
+        config=config, bus=bus, session_manager=sessions, static_dist_path=None,
+        workspace_path=tmp_path / "workspace", default_restrict_to_workspace=False,
+        config_path=tmp_path / "config.json", runtime_model_name=None,
+        runtime_surface="browser", runtime_capabilities_overrides=None,
+    )
+    gateway.http.push.subscribe(registration, ORIGIN)
+    channel = WebSocketChannel(config, bus, gateway=gateway)
+    pc = MagicMock(state=State.OPEN, id="pc-connection")
+    gateway.http.push.set_presence(pc, None, True, ORIGIN)
+    metadata = {WEBUI_TURN_METADATA_KEY: "turn-1", WEBUI_REPLY_CONNECTION_METADATA_KEY: pc.id}
+    if source:
+        metadata[WEBUI_MESSAGE_SOURCE_METADATA_KEY] = {"kind": source}
+    await channel.send(OutboundMessage(channel="websocket", chat_id="my-chat", content="",
+        event=TurnEndEvent(), metadata=metadata))
+    assert rows(gateway.http.push, "SELECT done FROM outbox") == [(int(source is None),)]
 
 
 def test_send_encrypts_payload_signs_request_and_disallows_redirects(tmp_path, registration, monkeypatch):

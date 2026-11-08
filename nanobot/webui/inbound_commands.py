@@ -52,6 +52,7 @@ from nanobot.webui.gateway_services import GatewayServices
 from nanobot.webui.mcp_presets_api import normalize_mcp_preset_mentions
 from nanobot.webui.metadata import (
     WEBSOCKET_TURN_OWNER_METADATA_KEY,
+    WEBUI_REPLY_CONNECTION_METADATA_KEY,
     WEBUI_RESTART_CONTROL_METADATA_KEY,
     WEBUI_SYSTEM_COMMAND_TURN_PREFIX,
 )
@@ -685,6 +686,8 @@ class WebUICommandRouter:
             metadata["webui"] = True
             metadata.update(self._transcripts.client_turn_metadata(envelope.get("turn_id")))
         trusted_webui = metadata.get("webui") is True and connection in self._webui_connections
+        if trusted_webui:
+            metadata[WEBUI_REPLY_CONNECTION_METADATA_KEY] = str(connection.id)
         # The settings Restart button uses the existing silent command protocol.
         # Its routing chat ID is not a new conversation or a workspace update.
         restart_control = (

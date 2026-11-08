@@ -88,7 +88,7 @@ class WebPushService:
         self.directory = directory
         self._task: asyncio.Task[None] | None = None
         self._wake = asyncio.Event()
-        self._visible: dict[ServerConnection, tuple[str, float]] = {}
+        self._visible: dict[ServerConnection, tuple[str | None, float]] = {}
 
     def _connect(self) -> sqlite3.Connection:
         self.directory.mkdir(parents=True, mode=0o700, exist_ok=True)
@@ -159,46 +159,55 @@ class WebPushService:
         with closing(self._connect()) as db:
             return db.execute("SELECT 1 FROM subscriptions WHERE id=?", (identifier,)).fetchone() is not None
 
-    def set_presence(self, connection: ServerConnection, identifier: str, visible: bool, origin: str) -> None:
+    def set_presence(self, connection: ServerConnection, identifier: str | None, visible: bool, origin: str) -> None:
         with closing(self._connect()) as db, db:
             row = db.execute("SELECT data FROM subscriptions WHERE id=?", (identifier,)).fetchone()
-            if row is None or json.loads(row[0])["origin"] != origin:
+            if row is not None and json.loads(row[0])["origin"] != origin:
                 raise ValueError("Push device does not belong to this browser origin")
+            if row is None:
+                identifier = None
             if visible and connection.state is State.OPEN:
                 self._visible[connection] = (identifier, time.monotonic() + 45)
                 # Returning to the app consumes queued alerts too, including
                 # retries whose next delivery attempt is still in the future.
-                pending = db.execute("SELECT id,payload FROM outbox WHERE subscription=? AND done=0",
-                                     (identifier,)).fetchall()
-                db.executemany("UPDATE outbox SET done=1 WHERE id=?",
-                               [(job,) for job, payload in pending if not json.loads(payload).get("test")])
+                pending = db.execute("SELECT id,subscription,payload FROM outbox WHERE done=0").fetchall()
+                consumed: list[tuple[str]] = []
+                for job, device, payload in pending:
+                    notice = json.loads(payload)
+                    if not notice.get("test") and (device == identifier or notice.get("reply_connection") == str(connection.id)):
+                        consumed.append((job,))
+                db.executemany("UPDATE outbox SET done=1 WHERE id=?", consumed)
             else:
                 self.clear_presence(connection)
 
     def clear_presence(self, connection: ServerConnection) -> None:
         self._visible.pop(connection, None)
 
-    def _device_visible(self, identifier: str) -> bool:
+    def _device_visible(self, identifier: str, reply_connection: str | None = None) -> bool:
         now = time.monotonic()
         for connection, (_, expires) in tuple(self._visible.items()):
             if expires <= now or connection.state is not State.OPEN:
                 self.clear_presence(connection)
-        return any(device == identifier for device, _ in self._visible.values())
+        # shortcut: replies follow their original socket; use a stable client ID if suppression must survive reconnects.
+        return any(device == identifier or str(connection.id) == reply_connection
+                   for connection, (device, _) in self._visible.items())
 
-    def _enqueue(self, identifier: str, settings: dict[str, Any], key: str, url: str, kind: str) -> None:
-        payload = json.dumps({"key": key, "url": url, "body": settings["bodies"][kind], "test": kind == "test"})
+    def _enqueue(self, identifier: str, settings: dict[str, Any], key: str, url: str, kind: str,
+                 reply_connection: str | None = None) -> None:
+        payload = json.dumps({"key": key, "url": url, "body": settings["bodies"][kind], "test": kind == "test",
+                              "reply_connection": reply_connection})
         job = hashlib.sha256((identifier + key).encode()).hexdigest()
         now = time.time()
         with closing(self._connect()) as db, db:
             if db.execute("SELECT count(*) FROM outbox WHERE done=0").fetchone()[0] >= 256:
                 logger.warning("Web Push queue is full")
                 return
-            done = int(kind != "test" and self._device_visible(identifier))
+            done = int(kind != "test" and self._device_visible(identifier, reply_connection))
             db.execute("INSERT OR IGNORE INTO outbox (id,subscription,payload,created,retry,done) VALUES (?,?,?,?,?,?)",
                        (job, identifier, payload, now, now, done))
         self._wake.set()
 
-    def enqueue_notice(self, payload: dict[str, Any]) -> None:
+    def enqueue_notice(self, payload: dict[str, Any], *, reply_connection: str | None = None) -> None:
         notice = notice_identity(payload)
         if notice is None or not (self.directory / "push.sqlite3").exists():
             return
@@ -208,7 +217,7 @@ class WebPushService:
         for identifier, raw in subscriptions:
             settings = json.loads(raw)
             url = settings["origin"] + "/#/chat/" + quote("websocket:" + payload["chat_id"], safe="")
-            self._enqueue(identifier, settings, key, url, kind)
+            self._enqueue(identifier, settings, key, url, kind, reply_connection)
 
     def test(self, identifier: str) -> None:
         with closing(self._connect()) as db:
@@ -255,13 +264,15 @@ class WebPushService:
                 pending = db.execute("SELECT 1 FROM outbox WHERE id=? AND done=0", (job,)).fetchone()
             if pending is None:
                 continue
-            if self._device_visible(identifier) and not json.loads(payload).get("test"):
+            notice = json.loads(payload)
+            reply_connection = notice.pop("reply_connection", None)
+            if self._device_visible(identifier, reply_connection) and not notice.get("test"):
                 with closing(self._connect()) as db, db:
                     db.execute("UPDATE outbox SET done=1 WHERE id=?", (job,))
                 continue
             settings = json.loads(raw)
             try:
-                status = await asyncio.to_thread(self._send, settings["subscription"], payload,
+                status = await asyncio.to_thread(self._send, settings["subscription"], json.dumps(notice),
                                                 self.directory / "vapid.pem", settings["origin"])
             except Exception:
                 # Never log endpoints, keys or HTTP exception strings (capability URLs).

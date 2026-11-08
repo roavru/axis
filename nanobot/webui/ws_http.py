@@ -597,17 +597,20 @@ class GatewayHTTPHandler:
                     identifier = self.push.subscribe(payload, request.headers.get("Origin", ""))
                     return _http_json_response({"id": identifier}, extra_headers=_NO_STORE_HEADERS)
                 identifier = payload.get("id")
+                if got == "/api/push/presence":
+                    visible = payload.get("visible")
+                    if not isinstance(visible, bool):
+                        return _http_error(400, "Invalid push visibility")
+                    if identifier is not None and (not isinstance(identifier, str) or len(identifier) != 64):
+                        return _http_error(400, "Invalid push device")
+                    self.push.set_presence(connection, identifier, visible, request.headers.get("Origin", ""))
+                    return _http_json_response({"queued": True}, extra_headers=_NO_STORE_HEADERS)
                 if not isinstance(identifier, str) or len(identifier) != 64:
                     return _http_error(400, "Invalid push device")
                 if got == "/api/push/unsubscribe":
                     self.push.unsubscribe(identifier)
                 elif got == "/api/push/test":
                     self.push.test(identifier)
-                elif got == "/api/push/presence":
-                    visible = payload.get("visible")
-                    if not isinstance(visible, bool):
-                        return _http_error(400, "Invalid push visibility")
-                    self.push.set_presence(connection, identifier, visible, request.headers.get("Origin", ""))
                 else:
                     return _http_error(404, "API route not found")
                 return _http_json_response({"queued": True}, extra_headers=_NO_STORE_HEADERS)

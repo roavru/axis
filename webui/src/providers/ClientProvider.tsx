@@ -41,7 +41,7 @@ export function ClientProvider({
   allowUpdateFlow?: boolean;
   children: ReactNode;
 }) {
-  usePushPresence(client, webuiCapabilities.includes("webui.push-presence.v1"));
+  usePushPresence(client, webuiCapabilities.includes("webui.push-presence.v2"));
   const tokenRef = useRef(token);
   tokenRef.current = token;
   const getToken = useCallback(() => tokenRef.current, []);

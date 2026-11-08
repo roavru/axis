@@ -79,11 +79,12 @@ it("reports foreground, background, renewal and reconnection for this device", a
   expect(offStatus).toHaveBeenCalledOnce();
 });
 
-it("starts reporting when background notifications are enabled after opening settings", async () => {
+it("reports a visible PC even without notification permission or a push subscription", async () => {
+  vi.stubGlobal("Notification", undefined);
   getSubscription.mockResolvedValue(null);
   renderHook(() => usePushPresence(client, true));
   await settle();
-  expect(mutation).not.toHaveBeenCalled();
+  expect(mutation).toHaveBeenCalledWith("settings.push.presence", { id: null, visible: true }, 5_000);
   getSubscription.mockResolvedValue({ endpoint: "https://fcm.googleapis.com/device" });
   act(() => { window.dispatchEvent(new Event(PUSH_SUBSCRIPTION_EVENT)); });
   await settle();
