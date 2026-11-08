@@ -56,7 +56,7 @@ from nanobot.webui.outbound_wire import (
     project_notification,
     project_tool_events,
 )
-from nanobot.webui.push import WebPushService
+from nanobot.webui.push import WebPushService, notification_preview
 from nanobot.webui.session_identity import webui_session_key
 from nanobot.webui.session_projection import WebUISessionProjection
 from nanobot.webui.temporary_chats import WebUITemporaryChats
@@ -110,6 +110,7 @@ class WebUIOutboundDelivery:
         self._push = push
         self._stream_text_buffers: dict[tuple[str, str], list[str]] = {}
         self._reasoning_text_buffers: dict[tuple[str, str], list[str]] = {}
+        self._notification_previews: dict[tuple[str, str], str] = {}
 
     def bind_pairing(self, bus: MessageBus, *, channel: str) -> Callable[[], None]:
         async def queue_changed(event: PairingChanged) -> None:
@@ -119,10 +120,15 @@ class WebUIOutboundDelivery:
 
     def discard(self, chat_id: str) -> None:
         """Forget unclosed streams when a turn ends or its chat is discarded."""
-        for buffers in (self._stream_text_buffers, self._reasoning_text_buffers):
+        for buffers in (self._stream_text_buffers, self._reasoning_text_buffers, self._notification_previews):
             for key in tuple(buffers):
                 if key[0] == chat_id:
                     buffers.pop(key, None)
+
+    def _remember_notification_preview(self, chat_id: str, text: str, metadata: dict[str, Any] | None) -> None:
+        turn_id = (metadata or {}).get(WEBUI_TURN_METADATA_KEY)
+        if isinstance(turn_id, str) and turn_id:
+            self._notification_previews[(chat_id, turn_id)] = notification_preview(text)
 
     async def hydrate(self, chat_id: str) -> None:
         for event in await self._session_projection.hydration_events(
@@ -419,6 +425,8 @@ class WebUIOutboundDelivery:
     async def _send_message(self, msg: OutboundMessage, progress: ProgressEvent | None) -> None:
         recipients = self._transport.webui_recipients(ChatAudience(msg.chat_id))
         body = self._message_payload(msg, progress)
+        if progress is None and msg.metadata.get(INBOUND_META_USER_SHELL) is not True:
+            self._remember_notification_preview(msg.chat_id, msg.content, msg.metadata)
         await self._persist_turn_transcript_event(
             msg.chat_id, body, metadata=msg.metadata,
             phase="activity" if progress else "answer", include_source=True,
@@ -491,6 +499,7 @@ class WebUIOutboundDelivery:
             if delta:
                 buffered.append(delta)
             full_text = "".join(buffered)
+            self._remember_notification_preview(chat_id, full_text, metadata)
             rewritten = self._media.rewrite_local_markdown_images(full_text)
             completed_text = rewritten
             if delta or rewritten != full_text:
@@ -522,6 +531,10 @@ class WebUIOutboundDelivery:
     ) -> None:
         recipients = self._transport.webui_recipients(ChatAudience(chat_id))
         body: dict[str, Any] = dict(payload)
+        if body["event"] == "turn_end" and body.get("outcome", "completed") == "completed":
+            preview = self._notification_previews.get((chat_id, body.get("turn_id", "")))
+            if preview:
+                body["notification_preview"] = preview
         if persistence == "turn_activity":
             await self._persist_turn_transcript_event(chat_id, body, metadata=metadata, phase="activity")
         elif persistence == "turn_complete":

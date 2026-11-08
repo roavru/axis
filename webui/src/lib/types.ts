@@ -1615,6 +1615,7 @@ export type InboundEvent =
   | ({
       event: "turn_end";
       chat_id: string;
+      notification_preview?: string;
       latency_ms?: number;
       usage?: TurnUsage;
       round_usages?: RoundUsage[];

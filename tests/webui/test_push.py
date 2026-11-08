@@ -11,7 +11,7 @@ from websockets.http11 import Request
 from websockets.protocol import State
 
 from nanobot.bus.events import OutboundMessage
-from nanobot.bus.outbound_events import TurnEndEvent
+from nanobot.bus.outbound_events import ProgressEvent, TurnEndEvent
 from nanobot.bus.queue import MessageBus
 from nanobot.channels.websocket.runtime import WebSocketChannel, WebSocketConfig
 from nanobot.session.manager import SessionManager
@@ -21,7 +21,12 @@ from nanobot.webui.metadata import (
     WEBUI_REPLY_CONNECTION_METADATA_KEY,
     WEBUI_TURN_METADATA_KEY,
 )
-from nanobot.webui.push import WebPushService, notice_identity, validate_subscription
+from nanobot.webui.push import (
+    WebPushService,
+    notice_identity,
+    notification_preview,
+    validate_subscription,
+)
 
 ORIGIN = "https://axis.example.test:8443"
 
@@ -44,6 +49,20 @@ def registration():
 def rows(service, sql):
     with closing(service._connect()) as db:
         return db.execute(sql).fetchall()
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("# Hola **Rodrigo**\n\nTu [recordatorio](https://example.test/?token=secret) está listo.",
+     "Hola Rodrigo Tu recordatorio está listo."),
+    ("uno\ndos  \ntres\n\n```python\nmi_archivo = 1\n```", "uno dos tres mi_archivo = 1"),
+    ("a" * 300, "a" * 300),
+    ("😀" * 160, "😀" * 149 + "…"),
+    (" \n ", ""),
+])
+def test_notification_preview_is_plain_text_and_fits_service_worker(text, expected):
+    preview = notification_preview(text)
+    assert preview == expected
+    assert len(preview.encode("utf-16-le")) // 2 <= 300
 
 
 @pytest.mark.asyncio
@@ -230,7 +249,8 @@ async def test_push_http_requires_auth_and_mutations_use_websocket(tmp_path, reg
 
 
 @pytest.mark.asyncio
-async def test_completed_turn_enqueues_push_without_websocket_subscribers(tmp_path, registration):
+@pytest.mark.parametrize("streamed", [False, True])
+async def test_completed_turn_enqueues_push_without_websocket_subscribers(tmp_path, registration, streamed):
     bus = MessageBus()
     sessions = SessionManager(tmp_path / "workspace")
     sessions.save(sessions.get_or_create("websocket:my-chat"))
@@ -247,10 +267,33 @@ async def test_completed_turn_enqueues_push_without_websocket_subscribers(tmp_pa
     connection = MagicMock(state=State.OPEN)
     gateway.http.push.set_presence(connection, identifier, True, ORIGIN)
     await channel._cleanup_connection(connection)
+    metadata = {WEBUI_TURN_METADATA_KEY: "turn-1"}
+    await channel.send(OutboundMessage(channel="websocket", chat_id="my-chat", content="Earlier step", metadata=metadata))
+    if streamed:
+        await channel.send_delta("my-chat", "**Tu correo** ", metadata, stream_id="answer")
+        await channel.send_delta("my-chat", "está listo.", metadata, stream_id="answer", stream_end=True)
+    else:
+        await channel.send(OutboundMessage(channel="websocket", chat_id="my-chat", content="**Tu correo** está listo.", metadata=metadata))
+    await channel.send_reasoning_delta("my-chat", "PRIVATE REASONING", metadata, stream_id="thinking")
+    await channel.send_reasoning_end("my-chat", metadata, stream_id="thinking")
+    await channel.send(OutboundMessage(channel="websocket", chat_id="my-chat", content="PRIVATE TOOL OUTPUT",
+        metadata=metadata, event=ProgressEvent(content="PRIVATE TOOL OUTPUT")))
+    await channel.send(OutboundMessage(channel="websocket", chat_id="another-chat", content="OTHER CHAT", metadata=metadata))
     await channel.send(OutboundMessage(channel="websocket", chat_id="my-chat", content="",
-        event=TurnEndEvent(), metadata={WEBUI_TURN_METADATA_KEY: "turn-1"}))
+        event=TurnEndEvent(), metadata=metadata))
     assert len(rows(gateway.http.push, "SELECT id FROM outbox")) == 1
     assert rows(gateway.http.push, "SELECT done FROM outbox") == [(0,)]
+    assert json.loads(rows(gateway.http.push, "SELECT payload FROM outbox")[0][0])["body"] == "Tu correo está listo."
+    await channel.send(OutboundMessage(channel="websocket", chat_id="my-chat", content="",
+        event=TurnEndEvent(), metadata={WEBUI_TURN_METADATA_KEY: "turn-2"}))
+    assert [json.loads(row[0])["body"] for row in rows(gateway.http.push, "SELECT payload FROM outbox ORDER BY created")] == [
+        "Tu correo está listo.", "Finished",
+    ]
+    failed_metadata = {WEBUI_TURN_METADATA_KEY: "turn-3"}
+    await channel.send(OutboundMessage(channel="websocket", chat_id="my-chat", content="PARTIAL RESPONSE", metadata=failed_metadata))
+    await channel.send(OutboundMessage(channel="websocket", chat_id="my-chat", content="",
+        event=TurnEndEvent(outcome="failed", failure_message="PRIVATE ERROR"), metadata=failed_metadata))
+    assert json.loads(rows(gateway.http.push, "SELECT payload FROM outbox ORDER BY created DESC")[0][0])["body"] == "Failed"
 
 
 @pytest.mark.asyncio
@@ -273,9 +316,11 @@ async def test_automation_delivery_does_not_inherit_pc_reply_suppression(tmp_pat
     metadata = {WEBUI_TURN_METADATA_KEY: "turn-1", WEBUI_REPLY_CONNECTION_METADATA_KEY: pc.id}
     if source:
         metadata[WEBUI_MESSAGE_SOURCE_METADATA_KEY] = {"kind": source}
+    await channel.send(OutboundMessage(channel="websocket", chat_id="my-chat", content="**Hora de cenar.**", metadata=metadata))
     await channel.send(OutboundMessage(channel="websocket", chat_id="my-chat", content="",
         event=TurnEndEvent(), metadata=metadata))
     assert rows(gateway.http.push, "SELECT done FROM outbox") == [(int(source is None),)]
+    assert json.loads(rows(gateway.http.push, "SELECT payload FROM outbox")[0][0])["body"] == "Hora de cenar."
 
 
 def test_send_encrypts_payload_signs_request_and_disallows_redirects(tmp_path, registration, monkeypatch):

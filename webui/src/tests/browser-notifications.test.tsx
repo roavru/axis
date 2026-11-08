@@ -233,7 +233,7 @@ describe("notification settings", () => {
   });
 });
 
-it("subscribes outside a chat, uses generic localized text, and cleans up", async () => {
+it("subscribes outside a chat, keeps failures generic and localized, and cleans up", async () => {
   vi.stubGlobal("Notification", { permission: "granted" });
   await i18n.changeLanguage("zh-CN");
   let handler!: (notice: TaskNotice) => void;
@@ -248,6 +248,20 @@ it("subscribes outside a chat, uses generic localized text, and cleans up", asyn
   expect(taskNoticeKey({ event, temporary: false })).toBe('["other","turn","end"]');
   unmount();
   expect(unsubscribe).toHaveBeenCalledOnce();
+});
+
+it("shows the server's message preview and falls back for hosts without previews", async () => {
+  vi.stubGlobal("Notification", { permission: "granted" });
+  await i18n.changeLanguage("en");
+  let handler!: (notice: TaskNotice) => void;
+  const client = { onTaskNotice: (value: typeof handler) => { handler = value; return () => {}; } };
+  render(<BrowserNotifications client={client} />);
+  handler({ event: { event: "turn_end", chat_id: "one", turn_id: "preview", notification_preview: "Tu correo está listo." }, temporary: false });
+  await waitFor(() => expect(postMessage).toHaveBeenCalledTimes(1));
+  expect(postMessage.mock.calls[0][0]).toMatchObject({ body: "Tu correo está listo." });
+  handler({ event: { event: "turn_end", chat_id: "one", turn_id: "old-host" }, temporary: false });
+  await waitFor(() => expect(postMessage).toHaveBeenCalledTimes(2));
+  expect(postMessage.mock.calls[1][0]).toMatchObject({ body: "Task completed. Click to view the result." });
 });
 
 it("does not report cancellation or interruption as completion", async () => {

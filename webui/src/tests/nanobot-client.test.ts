@@ -112,7 +112,7 @@ describe("NanobotClient", () => {
     const notice = vi.fn();
     const unsubscribe = client.onTaskNotice(notice);
     client.attach("away");
-    const event = { event: "turn_end", chat_id: "away", turn_id: "turn", outcome: "completed" };
+    const event = { event: "turn_end", chat_id: "away", turn_id: "turn", outcome: "completed", notification_preview: "Ready to read." };
     lastSocket().fakeMessage(event);
     expect(notice).toHaveBeenCalledWith({ event, temporary: false });
     const replay = vi.fn();

@@ -18,12 +18,29 @@ from uuid import uuid4
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from loguru import logger
+from rich.markdown import Markdown
 from websockets.asyncio.server import ServerConnection
 from websockets.protocol import State
 
 from nanobot.security.network import validate_url_target
 
 _PUSH_HOSTS = {"fcm.googleapis.com", "android.googleapis.com", "web.push.apple.com"}
+
+
+def notification_preview(text: str) -> str:
+    """Keep readable Markdown content within the service worker's UTF-16 limit."""
+    parts: list[str] = []
+    for token in Markdown(text).parsed:
+        if token.type == "inline":
+            parts.append("".join(
+                " " if child.type in {"softbreak", "hardbreak"} else child.content
+                for child in token.children or () if child.type != "html_inline"
+            ))
+        elif token.type in {"fence", "code_block"}:
+            parts.append(token.content)
+    plain = " ".join(" ".join(parts).split())
+    encoded = plain.encode("utf-16-le")
+    return plain if len(encoded) <= 600 else encoded[:598].decode("utf-16-le", errors="ignore").rstrip() + "…"
 
 
 def _decode(value: str) -> bytes:
@@ -193,8 +210,8 @@ class WebPushService:
                    for connection, (device, _) in self._visible.items())
 
     def _enqueue(self, identifier: str, settings: dict[str, Any], key: str, url: str, kind: str,
-                 reply_connection: str | None = None) -> None:
-        payload = json.dumps({"key": key, "url": url, "body": settings["bodies"][kind], "test": kind == "test",
+                 reply_connection: str | None = None, *, preview: str = "") -> None:
+        payload = json.dumps({"key": key, "url": url, "body": preview or settings["bodies"][kind], "test": kind == "test",
                               "reply_connection": reply_connection})
         job = hashlib.sha256((identifier + key).encode()).hexdigest()
         now = time.time()
@@ -217,7 +234,8 @@ class WebPushService:
         for identifier, raw in subscriptions:
             settings = json.loads(raw)
             url = settings["origin"] + "/#/chat/" + quote("websocket:" + payload["chat_id"], safe="")
-            self._enqueue(identifier, settings, key, url, kind, reply_connection)
+            self._enqueue(identifier, settings, key, url, kind, reply_connection,
+                          preview=payload.get("notification_preview", "") if kind == "completed" else "")
 
     def test(self, identifier: str) -> None:
         with closing(self._connect()) as db:

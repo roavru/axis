@@ -46,7 +46,7 @@ To receive alerts when the page is closed, open **Settings → Notifications** a
 
 The server sends encrypted Web Push through your browser's push service. The gateway can remain private inside your tailnet; it does not need Tailscale Funnel or a public inbound port. Receiving an alert requires internet access; opening its chat still requires access to the gateway. Browser or operating-system restrictions, a fully stopped browser, Focus settings, or a sleeping computer may delay or suppress alerts.
 
-Alerts contain generic task status and a chat link, never conversation text, file contents, or email previews. Temporary chats do not register background alerts. Subscriptions, the signing key and pending retries are stored privately under `<config-dir>/webui/push/`; include that directory in backups. The server retries transient failures for up to 24 hours, removes expired subscriptions, and retains duplicate receipts for 24 hours. Disabling the switch removes this device's subscription and pending alerts.
+Completed replies, including scheduled cron results, include a plain-text message preview of up to 300 characters and a chat link. Longer previews end with an ellipsis. Failures, recovery alerts, and replies without text use generic task status. Previews may appear on your lock screen, depending on your device settings. Temporary chats do not register background alerts. Subscriptions, the signing key and pending retries are stored privately under `<config-dir>/webui/push/`; include that directory in backups. The server retries transient failures for up to 24 hours, removes expired subscriptions, and retains duplicate receipts for 24 hours. Disabling the switch removes this device's subscription and pending alerts.
 
 ## Production notes
 

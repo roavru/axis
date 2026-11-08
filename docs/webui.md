@@ -111,6 +111,8 @@ Tasks in persistent topics can continue while the connection is lost. Status and
 
 Enable **Settings → Notifications → Background notifications** on each device to receive completion and recovery alerts with the page closed. Alerts are suppressed on a device where the app is visible. Replies to messages sent from another visible WebUI window are also suppressed, even if that browser cannot receive push. Scheduled cron jobs and other automation alerts still reach devices where the app is in the background. Returning to the app also consumes matching queued alerts, while the test button always sends a notification. Foreground detection requires the app's connection to the gateway; if that connection is unavailable, push delivery remains enabled. Push messages already handed to the browser's push service can still arrive after opening the app.
 
+Completed replies, including scheduled cron results, show a plain-text preview of the final message, limited to 300 characters. Longer previews end with an ellipsis; click to read the full reply. Failures, recovery alerts, and replies without text keep their generic notice. Message previews may be visible on your lock screen, depending on your device settings.
+
 The context indicator beside the model badge shows context-window usage. **Recent rounds** includes token usage, generation time and KV cache hits when reported. Provider figures may be estimated or unavailable and are not a billing statement.
 
 During compaction, the model switches to a summary plus subsequent messages; the original messages remain in chat history. Use `/compact` to compact the current topic manually. See [Memory](./memory.md) for compaction and Dream consolidation.

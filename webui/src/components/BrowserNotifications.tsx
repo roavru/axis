@@ -12,8 +12,10 @@ export function BrowserNotifications({ client }: { client: Pick<NanobotClient, "
     const outcome = event.event === "turn_end"
       ? event.outcome === "failed" ? "failed" : event.outcome === "interrupted" ? "interrupted" : "completed"
       : event.status === "failed" ? "failed" : "interrupted";
-    // Never expose conversation text, titles, model errors, or paths on a lock screen.
-    void showBrowserNotification(t(`settings.notifications.${outcome}`), {
+    const preview = event.event === "turn_end" && outcome === "completed" ? event.notification_preview : undefined;
+    const body = typeof preview === "string" && preview.trim() && preview.length <= 300
+      ? preview : t(`settings.notifications.${outcome}`);
+    void showBrowserNotification(body, {
       key, url: notificationChatUrl(event.chat_id, notice.temporary),
     });
   }), [client, t]);

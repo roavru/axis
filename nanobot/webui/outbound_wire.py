@@ -84,6 +84,7 @@ class RetryStatusWirePayload(_ChatWirePayload):
 
 class TurnEndWirePayload(_ChatWirePayload):
     event: Literal["turn_end"]
+    notification_preview: NotRequired[str]
     latency_ms: NotRequired[int]
     goal_state: NotRequired[dict[str, Any]]
     usage: NotRequired[dict[str, int]]
