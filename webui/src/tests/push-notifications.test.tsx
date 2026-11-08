@@ -68,7 +68,18 @@ it("keeps the switch off when registration fails", async () => {
   await waitFor(() => expect(screen.getByRole("switch")).toBeEnabled());
   fireEvent.click(screen.getByRole("switch"));
   await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Could not update notifications"));
+  expect(screen.getByRole("status")).toHaveTextContent("Error: Disconnected");
   expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+});
+
+it("shows the browser's push registration error so it can be diagnosed", async () => {
+  subscribe.mockRejectedValue(new DOMException("Registration failed - push service error", "AbortError"));
+  render(<PushNotificationSettings />);
+  await waitFor(() => expect(screen.getByRole("switch")).toBeEnabled());
+  fireEvent.click(screen.getByRole("switch"));
+  await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("AbortError: Registration failed - push service error"));
+  expect(screen.getByRole("switch")).toHaveAttribute("aria-checked", "false");
+  expect(state.mutation).not.toHaveBeenCalled();
 });
 
 it("keeps device subscriptions separate from a gateway on another origin", () => {

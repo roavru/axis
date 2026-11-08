@@ -7,6 +7,19 @@ import { Button } from "@/components/ui/button";
 import { useClient } from "@/providers/ClientProvider";
 import { fetchPushConfiguration } from "@/lib/api";
 
+type Feedback = {
+  key: "pushFailed" | "pushQueued" | "denied" | "dismissed" | "workerUnavailable";
+  detail?: string;
+};
+
+function failure(error: unknown): Feedback {
+  return {
+    key: "pushFailed",
+    detail: error instanceof Error || error instanceof DOMException
+      ? `${error.name}: ${error.message}` : undefined,
+  };
+}
+
 async function deviceId(subscription: PushSubscription): Promise<string> {
   const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(subscription.endpoint));
   return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, "0")).join("");
@@ -26,7 +39,7 @@ export function PushNotificationSettings() {
   const [enabled, setEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<Feedback | null>(null);
   useEffect(() => {
     let current = true;
     if (!supported) { setLoading(false); return; }
@@ -39,8 +52,8 @@ export function PushNotificationSettings() {
           setEnabled(!!subscription && status.registered && Notification.permission === "granted");
           setLoading(false);
         }
-      } catch {
-        if (current) { setFeedback("pushFailed"); setLoading(false); }
+      } catch (error) {
+        if (current) { setFeedback(failure(error)); setLoading(false); }
       }
     };
     void refresh();
@@ -49,13 +62,21 @@ export function PushNotificationSettings() {
   }, [supported, token]);
 
   async function toggle(value: boolean) {
-    // Request permission synchronously from the button gesture (required on iOS).
-    const permission = value && Notification.permission !== "granted" ? Notification.requestPermission() : null;
     setBusy(true); setFeedback(null);
     try {
-      if (permission && await permission !== "granted") throw new Error("permission");
+      // Request permission before the first await to preserve the button gesture on iOS.
+      if (value && Notification.permission !== "granted") {
+        const permission = await Notification.requestPermission();
+        if (permission !== "granted") {
+          setFeedback({ key: permission === "denied" ? "denied" : "dismissed" });
+          return;
+        }
+      }
       const registration = await navigator.serviceWorker.getRegistration();
-      if (!registration?.active) throw new Error("worker");
+      if (!registration?.active) {
+        setFeedback({ key: "workerUnavailable" });
+        return;
+      }
       let subscription = await registration.pushManager.getSubscription();
       if (value) {
         const configuration = await fetchPushConfiguration(token, "");
@@ -76,7 +97,7 @@ export function PushNotificationSettings() {
         await subscription.unsubscribe();
       }
       setEnabled(value);
-    } catch { setFeedback("pushFailed"); }
+    } catch (error) { setFeedback(failure(error)); }
     finally { setBusy(false); }
   }
 
@@ -86,8 +107,8 @@ export function PushNotificationSettings() {
       const subscription = await (await navigator.serviceWorker.getRegistration())?.pushManager.getSubscription();
       if (!subscription) throw new Error("subscription");
       await client.requestMutation("settings.push.test", { id: await deviceId(subscription) });
-      setFeedback("pushQueued");
-    } catch { setFeedback("pushFailed"); }
+      setFeedback({ key: "pushQueued" });
+    } catch (error) { setFeedback(failure(error)); }
     finally { setBusy(false); }
   }
 
@@ -101,7 +122,8 @@ export function PushNotificationSettings() {
       </>
     </SettingsRow>
     {(!supported || feedback) && <p role="status" className="settings-list-inset pb-3 text-[12px] text-muted-foreground">
-      {t(`settings.notifications.${!supported ? "pushUnsupported" : feedback}`)}
+      {t(`settings.notifications.${!supported ? "pushUnsupported" : feedback?.key}`)}
+      {supported && feedback?.detail && <span className="mt-1 block break-words font-mono">{feedback.detail}</span>}
     </p>}
   </div>;
 }
