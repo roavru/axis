@@ -18,6 +18,8 @@ from uuid import uuid4
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from loguru import logger
+from websockets.asyncio.server import ServerConnection
+from websockets.protocol import State
 
 from nanobot.security.network import validate_url_target
 
@@ -86,6 +88,7 @@ class WebPushService:
         self.directory = directory
         self._task: asyncio.Task[None] | None = None
         self._wake = asyncio.Event()
+        self._visible: dict[ServerConnection, tuple[str, float]] = {}
 
     def _connect(self) -> sqlite3.Connection:
         self.directory.mkdir(parents=True, mode=0o700, exist_ok=True)
@@ -156,6 +159,32 @@ class WebPushService:
         with closing(self._connect()) as db:
             return db.execute("SELECT 1 FROM subscriptions WHERE id=?", (identifier,)).fetchone() is not None
 
+    def set_presence(self, connection: ServerConnection, identifier: str, visible: bool, origin: str) -> None:
+        with closing(self._connect()) as db, db:
+            row = db.execute("SELECT data FROM subscriptions WHERE id=?", (identifier,)).fetchone()
+            if row is None or json.loads(row[0])["origin"] != origin:
+                raise ValueError("Push device does not belong to this browser origin")
+            if visible and connection.state is State.OPEN:
+                self._visible[connection] = (identifier, time.monotonic() + 45)
+                # Returning to the app consumes queued alerts too, including
+                # retries whose next delivery attempt is still in the future.
+                pending = db.execute("SELECT id,payload FROM outbox WHERE subscription=? AND done=0",
+                                     (identifier,)).fetchall()
+                db.executemany("UPDATE outbox SET done=1 WHERE id=?",
+                               [(job,) for job, payload in pending if not json.loads(payload).get("test")])
+            else:
+                self.clear_presence(connection)
+
+    def clear_presence(self, connection: ServerConnection) -> None:
+        self._visible.pop(connection, None)
+
+    def _device_visible(self, identifier: str) -> bool:
+        now = time.monotonic()
+        for connection, (_, expires) in tuple(self._visible.items()):
+            if expires <= now or connection.state is not State.OPEN:
+                self.clear_presence(connection)
+        return any(device == identifier for device, _ in self._visible.values())
+
     def _enqueue(self, identifier: str, settings: dict[str, Any], key: str, url: str, kind: str) -> None:
         payload = json.dumps({"key": key, "url": url, "body": settings["bodies"][kind], "test": kind == "test"})
         job = hashlib.sha256((identifier + key).encode()).hexdigest()
@@ -164,8 +193,9 @@ class WebPushService:
             if db.execute("SELECT count(*) FROM outbox WHERE done=0").fetchone()[0] >= 256:
                 logger.warning("Web Push queue is full")
                 return
-            db.execute("INSERT OR IGNORE INTO outbox (id,subscription,payload,created,retry) VALUES (?,?,?,?,?)",
-                       (job, identifier, payload, now, now))
+            done = int(kind != "test" and self._device_visible(identifier))
+            db.execute("INSERT OR IGNORE INTO outbox (id,subscription,payload,created,retry,done) VALUES (?,?,?,?,?,?)",
+                       (job, identifier, payload, now, now, done))
         self._wake.set()
 
     def enqueue_notice(self, payload: dict[str, Any]) -> None:
@@ -221,6 +251,14 @@ class WebPushService:
                               "JOIN subscriptions s ON s.id=o.subscription WHERE o.done=0 AND o.retry<=? "
                               "ORDER BY o.created LIMIT 32", (time.time(),)).fetchall()
         for job, identifier, payload, attempts, raw in jobs:
+            with closing(self._connect()) as db:
+                pending = db.execute("SELECT 1 FROM outbox WHERE id=? AND done=0", (job,)).fetchone()
+            if pending is None:
+                continue
+            if self._device_visible(identifier) and not json.loads(payload).get("test"):
+                with closing(self._connect()) as db, db:
+                    db.execute("UPDATE outbox SET done=1 WHERE id=?", (job,))
+                continue
             settings = json.loads(raw)
             try:
                 status = await asyncio.to_thread(self._send, settings["subscription"], payload,
@@ -233,7 +271,7 @@ class WebPushService:
             else:
                 done = int(200 <= status < 300 or (400 <= status < 500 and status != 429))
                 with closing(self._connect()) as db, db:
-                    db.execute("UPDATE outbox SET done=?,attempts=attempts+1,retry=? WHERE id=?",
+                    db.execute("UPDATE outbox SET done=?,attempts=attempts+1,retry=? WHERE id=? AND done=0",
                                (done, time.time() + min(30 * 2 ** min(attempts, 7), 3600), job))
                 if not 200 <= status < 300:
                     logger.warning("Web Push delivery failed (HTTP {}); {}", status, "stopped" if done else "will retry")
@@ -253,6 +291,7 @@ class WebPushService:
             self._task = asyncio.create_task(self._run())
 
     async def close(self) -> None:
+        self._visible.clear()
         if self._task is not None:
             self._task.cancel()
             with suppress(asyncio.CancelledError):

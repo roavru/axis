@@ -11,6 +11,7 @@ import type { NanobotClient } from "@/lib/nanobot-client";
 import type { WebUIIngressLimits } from "@/lib/types";
 import { VersionCheckProvider } from "@/providers/VersionCheckProvider";
 import { UpdateFlowProvider } from "@/providers/UpdateFlowProvider";
+import { usePushPresence } from "@/hooks/usePushPresence";
 
 interface ClientContextValue {
   client: NanobotClient;
@@ -40,6 +41,7 @@ export function ClientProvider({
   allowUpdateFlow?: boolean;
   children: ReactNode;
 }) {
+  usePushPresence(client, webuiCapabilities.includes("webui.push-presence.v1"));
   const tokenRef = useRef(token);
   tokenRef.current = token;
   const getToken = useCallback(() => tokenRef.current, []);

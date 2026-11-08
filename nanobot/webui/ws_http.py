@@ -170,6 +170,7 @@ _WEBUI_MUTATION_PATHS = {
     "settings.push.subscribe": "/api/push/subscribe",
     "settings.push.unsubscribe": "/api/push/unsubscribe",
     "settings.push.test": "/api/push/test",
+    "settings.push.presence": "/api/push/presence",
     "remote.discover": "/api/remote-instances/discover",
     "remote.pair_start": "/api/remote-instances/pair_start",
     "remote.pair_preview": "/api/remote-instances/pair_preview",
@@ -602,6 +603,11 @@ class GatewayHTTPHandler:
                     self.push.unsubscribe(identifier)
                 elif got == "/api/push/test":
                     self.push.test(identifier)
+                elif got == "/api/push/presence":
+                    visible = payload.get("visible")
+                    if not isinstance(visible, bool):
+                        return _http_error(400, "Invalid push visibility")
+                    self.push.set_presence(connection, identifier, visible, request.headers.get("Origin", ""))
                 else:
                     return _http_error(404, "API route not found")
                 return _http_json_response({"queued": True}, extra_headers=_NO_STORE_HEADERS)

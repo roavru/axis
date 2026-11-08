@@ -1,13 +1,14 @@
 import base64
 import json
 from contextlib import closing
-from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from websockets.datastructures import Headers
 from websockets.http11 import Request
+from websockets.protocol import State
 
 from nanobot.bus.events import OutboundMessage
 from nanobot.bus.outbound_events import TurnEndEvent
@@ -89,6 +90,62 @@ async def test_expired_subscription_and_disabled_device_stop_delivery(tmp_path, 
     assert rows(service, "SELECT id FROM outbox") == []
 
 
+@pytest.mark.asyncio
+async def test_visible_app_silences_only_its_device_and_consumes_alerts(tmp_path, registration, monkeypatch):
+    service = WebPushService(tmp_path)
+    first = service.subscribe(registration, ORIGIN)
+    second_registration = {**registration, "subscription": {**registration["subscription"],
+                           "endpoint": "https://fcm.googleapis.com/fcm/send/other-device"}}
+    second = service.subscribe(second_registration, ORIGIN)
+    connection = MagicMock(state=State.OPEN)
+    service.set_presence(connection, first, True, ORIGIN)
+    event = {"event": "turn_end", "chat_id": "chat", "turn_id": "one"}
+    service.enqueue_notice(event)
+    service.test(first)  # The explicit test button still works while visible.
+    sent = []
+    monkeypatch.setattr(service, "_send", lambda *args: sent.append(args) or 201)
+    await service._drain()
+    assert sorted(json.loads(args[1])["test"] for args in sent) == [False, True]
+    assert {row[0]: row[1] for row in rows(service, "SELECT subscription,done FROM outbox WHERE attempts=0")} == {first: 1}
+    assert service.has_subscription(second)
+    service.set_presence(connection, first, False, ORIGIN)
+    service.enqueue_notice(event)
+    await service._drain()
+    assert len(sent) == 2  # No delayed alert for the response seen in the app.
+    service.enqueue_notice({**event, "turn_id": "two"})
+    await service._drain()
+    assert len(sent) == 4
+
+
+def test_presence_survives_other_tabs_hiding_but_expires_after_lost_contact(tmp_path, registration, monkeypatch):
+    service = WebPushService(tmp_path)
+    identifier = service.subscribe(registration, ORIGIN)
+    first, second = MagicMock(state=State.OPEN), MagicMock(state=State.OPEN)
+    now = [100.0]
+    monkeypatch.setattr("nanobot.webui.push.time.monotonic", lambda: now[0])
+    service.set_presence(first, identifier, True, ORIGIN)
+    service.set_presence(second, identifier, True, ORIGIN)
+    service.set_presence(first, identifier, False, ORIGIN)
+    assert service._device_visible(identifier)
+    second.state = State.CLOSED
+    assert not service._device_visible(identifier)
+    first.state = State.OPEN
+    service.set_presence(first, identifier, True, ORIGIN)
+    now[0] += 46
+    assert not service._device_visible(identifier)
+
+
+@pytest.mark.asyncio
+async def test_returning_to_app_consumes_pending_retries(tmp_path, registration, monkeypatch):
+    service = WebPushService(tmp_path)
+    identifier = service.subscribe(registration, ORIGIN)
+    service.enqueue_notice({"event": "turn_end", "chat_id": "chat", "turn_id": "one"})
+    monkeypatch.setattr(service, "_send", lambda *args: 503)
+    await service._drain()
+    service.set_presence(MagicMock(state=State.OPEN), identifier, True, ORIGIN)
+    assert rows(service, "SELECT done,attempts FROM outbox") == [(1, 1)]
+
+
 @pytest.mark.parametrize("endpoint", [
     "http://fcm.googleapis.com/send/x", "https://127.0.0.1/private",
     "https://fcm.googleapis.com.evil.test/send/x", "https://user@fcm.googleapis.com/send/x",
@@ -118,7 +175,7 @@ async def test_push_http_requires_auth_and_mutations_use_websocket(tmp_path, reg
         config_path=tmp_path / "config.json", runtime_model_name=None,
         runtime_surface="browser", runtime_capabilities_overrides=None,
     )
-    connection = SimpleNamespace(remote_address=("192.0.2.1", 1), request=Request("/", Headers({"Origin": ORIGIN})))
+    connection = MagicMock(state=State.OPEN, remote_address=("192.0.2.1", 1), request=Request("/", Headers({"Origin": ORIGIN})))
     response = await gateway.http.dispatch(connection, Request("/api/push", Headers()))
     assert response.status_code == 401
     token = gateway.tokens.issue_api_token(300)
@@ -134,6 +191,14 @@ async def test_push_http_requires_auth_and_mutations_use_websocket(tmp_path, reg
     response = await gateway.http.dispatch_webui_mutation(connection, "settings.push.test", {"id": identifier})
     assert response.status_code == 200
     assert len(rows(gateway.http.push, "SELECT id FROM outbox")) == 1
+    response = await gateway.http.dispatch_webui_mutation(connection, "settings.push.presence", {"id": identifier, "visible": True})
+    assert response.status_code == 200
+    assert gateway.http.push._device_visible(identifier)
+    response = await gateway.http.dispatch_webui_mutation(connection, "settings.push.presence", {"id": identifier, "visible": "false"})
+    assert response.status_code == 400
+    connection.request = Request("/", Headers({"Origin": "https://another.test"}))
+    response = await gateway.http.dispatch_webui_mutation(connection, "settings.push.presence", {"id": identifier, "visible": False})
+    assert response.status_code == 400
 
 
 @pytest.mark.asyncio
@@ -150,9 +215,14 @@ async def test_completed_turn_enqueues_push_without_websocket_subscribers(tmp_pa
     )
     gateway.http.push.subscribe(registration, ORIGIN)
     channel = WebSocketChannel(config, bus, gateway=gateway)
+    identifier = gateway.http.push.subscribe(registration, ORIGIN)
+    connection = MagicMock(state=State.OPEN)
+    gateway.http.push.set_presence(connection, identifier, True, ORIGIN)
+    await channel._cleanup_connection(connection)
     await channel.send(OutboundMessage(channel="websocket", chat_id="my-chat", content="",
         event=TurnEndEvent(), metadata={WEBUI_TURN_METADATA_KEY: "turn-1"}))
     assert len(rows(gateway.http.push, "SELECT id FROM outbox")) == 1
+    assert rows(gateway.http.push, "SELECT done FROM outbox") == [(0,)]
 
 
 def test_send_encrypts_payload_signs_request_and_disallows_redirects(tmp_path, registration, monkeypatch):

@@ -6,6 +6,7 @@ import { ToggleButton } from "@/components/ui/toggle-button";
 import { Button } from "@/components/ui/button";
 import { useClient } from "@/providers/ClientProvider";
 import { fetchPushConfiguration } from "@/lib/api";
+import { PUSH_SUBSCRIPTION_EVENT, pushDeviceId as deviceId } from "@/lib/push-device";
 
 type Feedback = {
   key: "pushFailed" | "pushQueued" | "denied" | "dismissed" | "workerUnavailable";
@@ -18,11 +19,6 @@ function failure(error: unknown): Feedback {
     detail: error instanceof Error || error instanceof DOMException
       ? `${error.name}: ${error.message}` : undefined,
   };
-}
-
-async function deviceId(subscription: PushSubscription): Promise<string> {
-  const bytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(subscription.endpoint));
-  return Array.from(new Uint8Array(bytes), byte => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function publicKey(value: string): Uint8Array<ArrayBuffer> {
@@ -97,6 +93,7 @@ export function PushNotificationSettings() {
         await subscription.unsubscribe();
       }
       setEnabled(value);
+      window.dispatchEvent(new Event(PUSH_SUBSCRIPTION_EVENT));
     } catch (error) { setFeedback(failure(error)); }
     finally { setBusy(false); }
   }

@@ -475,6 +475,7 @@ class WebSocketChannel(BaseChannel):
 
     async def _cleanup_connection(self, connection: ServerConnection) -> None:
         self._retired_connections.add(connection)
+        self.gateway.http.push.clear_presence(connection)
         self._uploads.revoke(connection)
         state = self._connection_outbound.get(connection)
         if state is not None:
