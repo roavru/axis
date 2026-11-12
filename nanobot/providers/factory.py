@@ -88,6 +88,15 @@ def _make_provider_core(
             extra_body=p.extra_body if p else None,
             provider_name=provider_name,
         )
+    elif backend == "claude_agent":
+        from nanobot.config.paths import get_runtime_subdir
+        from nanobot.providers.claude_agent import ClaudeAgentProvider
+
+        provider = ClaudeAgentProvider(
+            workdir=get_runtime_subdir("claude-agent"),
+            default_model=model,
+            provider_name=provider_name,
+        )
     elif backend == "azure_openai":
         from nanobot.providers.azure_openai_provider import AzureOpenAIProvider
 

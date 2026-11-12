@@ -233,6 +233,18 @@ def oauth_provider_status(spec: Any) -> dict[str, Any]:
             "login_supported": True,
         }
 
+    if spec.name == "claude_agent":
+        from nanobot.providers.claude_agent.probe import cached_probe
+
+        status = cached_probe()
+        # Claude Code signs in from its own terminal command, not from nanobot.
+        return {
+            "configured": status.state == "ready",
+            "account": status.auth_method,
+            "expires_at": None,
+            "login_supported": False,
+        }
+
     if spec.name == "github_copilot":
         try:
             from nanobot.providers.github_copilot_provider import get_github_copilot_login_status

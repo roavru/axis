@@ -12,6 +12,7 @@ __all__ = [
     "OpenAICodexProvider",
     "XAIGrokProvider",
     "GitHubCopilotProvider",
+    "ClaudeAgentProvider",
     "AzureOpenAIProvider",
     "BedrockProvider",
 ]
@@ -25,6 +26,7 @@ _LAZY_IMPORTS = {
     "OpenAICodexProvider": ".openai_codex_provider",
     "XAIGrokProvider": ".xai_grok_provider",
     "GitHubCopilotProvider": ".github_copilot_provider",
+    "ClaudeAgentProvider": ".claude_agent",
     "AzureOpenAIProvider": ".azure_openai_provider",
     "BedrockProvider": ".bedrock_provider",
 }
@@ -34,6 +36,7 @@ if TYPE_CHECKING:
     from nanobot.providers.azure_openai_provider import AzureOpenAIProvider
     from nanobot.providers.base import LLMProvider, LLMResponse, LLMUsage
     from nanobot.providers.bedrock_provider import BedrockProvider
+    from nanobot.providers.claude_agent import ClaudeAgentProvider
     from nanobot.providers.github_copilot_provider import GitHubCopilotProvider
     from nanobot.providers.openai_codex_provider import OpenAICodexProvider
     from nanobot.providers.openai_compat_provider import OpenAICompatProvider

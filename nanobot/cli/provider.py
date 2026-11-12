@@ -23,12 +23,14 @@ _PROVIDER_DISPLAY: dict[str, str] = {
     "openai_codex": "OpenAI Codex",
     "xai_grok": "xAI Grok",
     "github_copilot": "GitHub Copilot",
+    "claude_agent": "Claude Agent",
 }
 
 _OAUTH_PROVIDER_DEFAULT_MODELS: dict[str, str] = {
     "openai_codex": "openai-codex/gpt-5.6-sol",
     "xai_grok": "xai-grok/grok-4.6",
     "github_copilot": "github-copilot/gpt-5.4-mini",
+    "claude_agent": "claude-agent/opus",
 }
 
 
@@ -354,13 +356,42 @@ def _login_github_copilot() -> None:
         raise typer.Exit(1)
 
 
+def _login_claude_agent() -> None:
+    """Check Claude Code's own login; nanobot never stores Claude credentials."""
+    import importlib.util
+
+    from nanobot.providers.claude_agent.probe import probe
+
+    if importlib.util.find_spec("claude_agent_sdk") is None:
+        console.print(
+            "[red]The Claude Agent SDK is not installed.[/red]  "
+            "Install it with: [cyan]pip install 'nanobot-ai[claude-agent]'[/cyan]"
+        )
+        raise typer.Exit(1)
+    status = probe()
+    if status.state != "ready":
+        console.print(f"[red]{status.message}[/red]")
+        raise typer.Exit(1)
+    method = f"  [dim]{status.auth_method}[/dim]" if status.auth_method else ""
+    console.print(f"[green]✓ Claude Code {status.version} is signed in[/green]{method}")
+
+
+def _logout_claude_agent() -> None:
+    console.print(
+        "nanobot does not store Claude credentials. "
+        "To sign Claude Code out, run [cyan]claude auth logout[/cyan]."
+    )
+
+
 _LOGIN_HANDLERS: dict[str, Callable[[], None]] = {
     "openai_codex": _login_openai_codex,
     "xai_grok": _login_xai_grok,
     "github_copilot": _login_github_copilot,
+    "claude_agent": _login_claude_agent,
 }
 _LOGOUT_HANDLERS: dict[str, Callable[[], None]] = {
     "openai_codex": _logout_openai_codex,
     "xai_grok": _logout_xai_grok,
     "github_copilot": _logout_github_copilot,
+    "claude_agent": _logout_claude_agent,
 }

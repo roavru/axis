@@ -609,6 +609,44 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
             allows_chat_fallback=False,
         ),
     ),
+    # Claude plan, API key or cloud account through the user's own Claude Code login.
+    # Claude Code makes the request; nanobot never reads its credentials.
+    ProviderSpec(
+        name="claude_agent",
+        keywords=("claude-agent", "claude_agent"),
+        env_key="",
+        request_apis=("anthropic_messages",),
+        display_name="Claude Agent",
+        model_catalog="builtin",
+        builtin_models=(
+            ProviderModelSpec(
+                id="claude-agent/opus",
+                label="Opus",
+                description="Claude Code's current Opus model.",
+                reasoning_efforts=("low", "medium", "high", "xhigh", "max"),
+            ),
+            ProviderModelSpec(
+                id="claude-agent/sonnet",
+                label="Sonnet",
+                description="Claude Code's current Sonnet model.",
+                reasoning_efforts=("low", "medium", "high", "xhigh", "max"),
+            ),
+            ProviderModelSpec(
+                id="claude-agent/haiku",
+                label="Haiku",
+                description="Claude Code's current Haiku model.",
+                reasoning_efforts=("low", "medium", "high", "xhigh", "max"),
+            ),
+            ProviderModelSpec(
+                id="claude-agent/fable",
+                label="Fable",
+                description="Claude Code's current Fable model.",
+                reasoning_efforts=("low", "medium", "high", "xhigh", "max"),
+            ),
+        ),
+        backend="claude_agent",
+        is_oauth=True,
+    ),
     ProviderSpec(
         name="deepseek",
         keywords=("deepseek",),

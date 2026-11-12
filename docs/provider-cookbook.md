@@ -18,6 +18,7 @@ Match the recipe to the credential or endpoint you already have:
 | An OpenCode Zen or Go key | [OpenCode Zen or Go](#recipe-opencode-zen-or-go) | `OPENCODE_API_KEY`, the Zen/Go provider key, and a model ID from the matching OpenCode endpoint |
 | An OpenAI platform API key and OpenAI model ID | [OpenAI Direct](#recipe-openai-direct) | `OPENAI_API_KEY`, `provider: "openai"`, and an OpenAI model available to that account |
 | An Anthropic API key and Anthropic model ID | [Anthropic Direct](#recipe-anthropic-direct) | `ANTHROPIC_API_KEY`, `provider: "anthropic"`, and a non-gateway model ID |
+| Claude Code installed and signed in, for example with a Claude plan | [Claude Agent](#recipe-claude-agent) | `provider: "claude_agent"`, a `claude-agent/...` model, and Claude Code on the same machine as nanobot |
 | A Kimi Coding Plan key | [Kimi Coding Plan](#recipe-kimi-coding-plan) | `KIMI_CODING_API_KEY`, `provider: "kimi_coding"`, and `model: "kimi-for-coding"` |
 | An OpenAI-compatible `/v1` endpoint that is not a named nanobot provider | [Custom OpenAI-Compatible Provider](#recipe-custom-openai-compatible-provider) | `apiBase`, optional API key, and the model ID served by that endpoint |
 | Ollama already running locally | [Ollama Local Model](#recipe-ollama-local-model) | Ollama `apiBase`, pulled model name, and local server availability |
@@ -300,6 +301,56 @@ If you use an Anthropic-compatible proxy, keep the preset provider as `anthropic
 </details>
 
 Do not configure Anthropic-compatible endpoints as arbitrary custom provider names; named custom providers use the OpenAI-compatible request format.
+
+## Recipe: Claude Agent
+
+Claude Agent uses the login of the Claude Code installed on the same machine as nanobot: a Claude plan, an Anthropic API key, or a cloud account. nanobot runs `claude` through Anthropic's Claude Agent SDK. Claude Code makes the model request, and nanobot never reads its credentials. Everything else stays nanobot's: tools and their permissions, memory, compaction, subagents, Dream, and heartbeat.
+
+1. Install the extra: `pip install 'nanobot-ai[claude-agent]'`.
+2. Install Claude Code 2.1.248 or later, then sign in with `claude auth login`. On a server without a browser, run `claude setup-token` and set the token it prints as `CLAUDE_CODE_OAUTH_TOKEN` in the environment of the nanobot service.
+3. Check the login: `nanobot provider login claude-agent`.
+4. Create a preset with provider **Claude Agent** and a model such as `claude-agent/opus`, `claude-agent/sonnet`, `claude-agent/haiku` or `claude-agent/fable`. These names follow Claude Code's own aliases.
+
+nanobot finds `claude` on `PATH`. To run another copy, set `NANOBOT_CLAUDE_PATH`.
+
+<details>
+<summary>Manual configuration</summary>
+
+```json
+{
+  "modelPresets": {
+    "claude": {
+      "provider": "claude_agent",
+      "model": "claude-agent/opus",
+      "contextWindowTokens": 200000,
+      "reasoningEffort": "high"
+    }
+  },
+  "agents": {
+    "defaults": {
+      "modelPreset": "claude"
+    }
+  }
+}
+```
+
+</details>
+
+Verify:
+
+```bash
+nanobot agent -m "Hello!"
+```
+
+Usage from a Claude plan counts against that plan's limits, including background work such as heartbeat, Dream and subagents. Use `dream.modelOverride` or separate presets to keep background work on another model.
+
+Limitations:
+
+- Claude Code must run on the same machine as the nanobot gateway. Each active session keeps one `claude` process, closed after 5 minutes idle.
+- Claude Code's own settings, `CLAUDE.md` files, hooks, MCP servers, skills, memory and built-in tools are not loaded. Claude only sees nanobot's tools.
+- `temperature`, `maxTokens` and forced tool choice are ignored. `reasoningEffort` maps to Claude Code's effort levels: `low`, `medium`, `high`, `xhigh` and `max`.
+- Claude Code runs the calls of one response one at a time; nanobot still receives and runs them as one batch.
+- A request without a session, such as the heartbeat evaluator, starts a new `claude` process and takes a few seconds longer.
 
 ## Recipe: Kimi Coding Plan
 
@@ -688,6 +739,8 @@ In chat:
 | `connection refused` | Local server is not running or `apiBase` has the wrong port/path | Run `curl <apiBase>/models` |
 | `provider not found` | Provider name is misspelled or uses the config key instead of registry name | Use names such as `openrouter`, `openai`, `anthropic`, `ollama`, `vllm`, `lm_studio` |
 | Langfuse shows no traces | Env vars are missing, `langfuse` is not installed in the active Python environment, or the provider path is a native provider other than Codex OAuth | Run `python -m pip show langfuse` and restart nanobot from the same environment |
+| `Claude Code is not installed` or `is too old` | `claude` is missing from the service's `PATH` or older than 2.1.248 | Run `claude --version` as the user that runs nanobot, or set `NANOBOT_CLAUDE_PATH` |
+| Claude Agent replies with an authentication or plan-limit error | Claude Code is signed out, or the Claude plan reached its usage limit | Run `nanobot provider login claude-agent`; Claude Code already retried, so nanobot does not retry again |
 
 ## Next References
 
