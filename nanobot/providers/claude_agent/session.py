@@ -7,7 +7,6 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Literal, cast
 
 from loguru import logger
@@ -72,7 +71,6 @@ class ClaudeProcess:
         config: ProcessConfig,
         tools: ToolSet,
         *,
-        cwd: Path,
         resume: str | None = None,
         resume_at: str | None = None,
         fork: bool = False,
@@ -92,7 +90,6 @@ class ClaudeProcess:
         self._new_session_id = None if resume is not None else str(uuid.uuid4())
         if self._new_session_id is not None:
             self.session_id = self._new_session_id
-        self._cwd = cwd
         self._resume = resume
         self._resume_at = resume_at
         self._fork = fork
@@ -107,7 +104,6 @@ class ClaudeProcess:
 
         options = build_options(
             self.config,
-            cwd=self._cwd,
             mcp_server=make_server(self.tools, self.pending) if self.tools.definitions else None,
             hooks=make_hooks(self.pending) if self.tools.definitions else None,
             session_id=self._new_session_id,

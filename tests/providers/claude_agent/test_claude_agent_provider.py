@@ -150,7 +150,7 @@ async def test_restart_resumes_the_saved_claude_session(
     session = saved.payload["session"]
     await first.llm.aclose()
 
-    async def transcript_ends_at_head(self: ClaudeSessions, session_id: str, head: str) -> bool:
+    async def transcript_ends_at_head(self: ClaudeSessions, session_id: str, head: str, cwd: Path) -> bool:
         return True
 
     monkeypatch.setattr(ClaudeSessions, "_ends_at", transcript_ends_at_head)
@@ -268,6 +268,61 @@ async def test_request_without_session_is_not_persisted(tmp_path: Path) -> None:
     assert list((tmp_path / "prompts").glob("*")) != []
     await llm.aclose()
     assert list((tmp_path / "prompts").glob("*")) == []
+
+
+@pytest.mark.asyncio
+async def test_claude_runs_in_the_conversation_folder_and_keeps_it_for_its_session(tmp_path: Path) -> None:
+    project = tmp_path / "atlas"
+    other = tmp_path / "other"
+    project.mkdir()
+    other.mkdir()
+    brain = Brain(turns=[[Text("one")], [Text("summary")], [Text("moved")]])
+    llm = provider(brain, tmp_path / "data")
+    messages: list[dict[str, Any]] = [SYSTEM, {"role": "user", "content": "first"}]
+
+    first = await llm.chat_stream_with_retry(
+        messages=messages, tools=[WORD_TOOL], model=MODEL,
+        provider_context=ProviderCallContext(session_id=KEY, working_directory=project),
+    )
+    assert first.provider_state is not None
+    assert brain.options[0].cwd == str(project)
+    assert first.provider_state.payload["cwd"] == str(project)
+
+    # A side call without a folder forks the saved session where it lives.
+    side_prompt = {"role": "user", "content": "summarize"}
+    await llm.chat_stream_with_retry(
+        messages=[*messages, side_prompt], tools=None, model=MODEL,
+        provider_context=ProviderCallContext(
+            conversation_state=first.provider_state.with_pending_messages([side_prompt]), session_id=KEY,
+        ),
+    )
+    assert brain.options[1].cwd == str(project)
+    assert brain.options[1].resume == first.provider_state.payload["session"]
+
+    # A conversation that moved to another folder starts a new Claude session there.
+    moved_prompt = {"role": "user", "content": "again"}
+    await llm.chat_stream_with_retry(
+        messages=[*messages, {"role": "assistant", "content": "one"}, moved_prompt], model=MODEL,
+        provider_context=ProviderCallContext(
+            conversation_state=first.provider_state.with_pending_messages([moved_prompt]),
+            session_id=KEY, working_directory=other,
+        ),
+    )
+    assert brain.options[2].cwd == str(other)
+    assert brain.options[2].resume is None
+    assert texts(brain.received[2]).startswith("<conversation-checkpoint>")
+    await llm.aclose()
+
+
+@pytest.mark.asyncio
+async def test_sessions_are_named_so_claude_code_skips_its_title_request(tmp_path: Path) -> None:
+    brain = Brain(turns=[[Text("hi")]])
+    llm = provider(brain, tmp_path)
+
+    await llm.chat_stream_with_retry(messages=[SYSTEM, {"role": "user", "content": "hello"}], model=MODEL)
+
+    assert brain.options[0].extra_args["name"] == "nanobot"
+    await llm.aclose()
 
 
 @pytest.mark.asyncio

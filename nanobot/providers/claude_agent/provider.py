@@ -95,6 +95,7 @@ class ClaudeAgentProvider(LLMProvider):
             state=provider_context.current_conversation_state if provider_context is not None else None,
             on_content_delta=on_content_delta,
             on_thinking_delta=on_thinking_delta,
+            working_directory=provider_context.working_directory if provider_context is not None else None,
         )
         try:
             return await self._sessions.run(request)

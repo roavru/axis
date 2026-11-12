@@ -58,6 +58,8 @@ class Request:
     state: ProviderConversationState | None
     on_content_delta: Callable[[str], Awaitable[None]] | None = None
     on_thinking_delta: Callable[[str], Awaitable[None]] | None = None
+    # The conversation's project folder, when the caller knows it.
+    working_directory: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -65,6 +67,8 @@ class SavedState:
     session: str
     head: str
     awaiting: tuple[str, ...]
+    # Where the Claude session was created; None for states saved before this was recorded.
+    cwd: Path | None
 
     @classmethod
     def parse(cls, state: ProviderConversationState | None) -> SavedState | None:
@@ -72,12 +76,14 @@ class SavedState:
             return None
         payload = state.payload
         awaiting = cast(object, payload.get("awaiting") or [])
+        cwd = payload.get("cwd")
         return cls(
             session=str(payload["session"]),
             head=str(payload["head"]),
             awaiting=tuple(str(item) for item in cast(list[object], awaiting))
             if isinstance(awaiting, list)
             else (),
+            cwd=Path(cwd) if isinstance(cwd, str) and cwd else None,
         )
 
 
@@ -122,17 +128,22 @@ class ClaudeSessions:
                 kind="missing",
             )
         tools = ToolSet(request.tools)
+        saved = SavedState.parse(request.state) if request.state is not None else None
         config = ProcessConfig(
             executable=executable,
             model=request.model,
             effort=request.effort,
             system_prompt_file=self._prompt_file(system_prompt(request.messages) or _DEFAULT_SYSTEM),
             tool_names=tools.names,
+            cwd=self._cwd_for(request, saved),
             connection_env=self._connection_env,
         )
+        if saved is not None and (saved.cwd or self._workdir) != config.cwd:
+            # The conversation moved to another folder; Claude's saved session lives in the old one.
+            saved = None
         persist = request.key is not None
         try:
-            process, payload = await self._choose(request, config, tools, persist=persist)
+            process, payload = await self._choose(request, saved, config, tools, persist=persist)
         except ClaudeAgentError:
             raise
         except Exception as exc:
@@ -166,17 +177,30 @@ class ClaudeSessions:
             self._register(process)
         return self._response(process, step, result, model=request.model, keep_state=persist and not result.is_error)
 
+    def _cwd_for(self, request: Request, saved: SavedState | None) -> Path:
+        """Run where the conversation works, so Claude Code reports the real folder.
+
+        A request without a folder, such as the memory archiver's side call,
+        stays where its saved Claude session was created.
+        """
+        folder = request.working_directory
+        if folder is not None and folder.is_dir():
+            return folder.resolve()
+        if saved is not None and saved.cwd is not None:
+            return saved.cwd
+        return self._workdir
+
     async def _choose(
         self,
         request: Request,
+        saved: SavedState | None,
         config: ProcessConfig,
         tools: ToolSet,
         *,
         persist: bool,
     ) -> tuple[ClaudeProcess, dict[str, Any] | list[dict[str, Any]]]:
         """Pick the process for this request and what to give it."""
-        saved = SavedState.parse(request.state) if request.state is not None else None
-        pending = request.state.pending_messages if request.state is not None else []
+        pending = request.state.pending_messages if saved is not None and request.state is not None else []
         if saved is not None:
             live = self._live.get(saved.session)
             reusable = (
@@ -199,7 +223,7 @@ class ClaudeSessions:
                     return live, blocks
                 # Fork when the saved session may have moved past the saved entry, or
                 # another process still owns it; otherwise resume it in place.
-                fork = live is not None or not await self._ends_at(saved.session, saved.head)
+                fork = live is not None or not await self._ends_at(saved.session, saved.head, config.cwd)
                 process = await self._spawn(
                     config, tools, resume=saved.session, resume_at=saved.head, fork=fork, persist=persist,
                 )
@@ -209,16 +233,16 @@ class ClaudeSessions:
 
     async def _spawn(self, config: ProcessConfig, tools: ToolSet, **kwargs: Any) -> ClaudeProcess:
         self._ensure_reaper()
-        process = ClaudeProcess(config, tools, cwd=self._workdir, client_factory=self._client_factory, **kwargs)
+        process = ClaudeProcess(config, tools, client_factory=self._client_factory, **kwargs)
         await process.start()
         return process
 
-    async def _ends_at(self, session: str, head: str) -> bool:
+    async def _ends_at(self, session: str, head: str, cwd: Path) -> bool:
         """Whether the saved Claude transcript still ends at *head*."""
         try:
             from claude_agent_sdk import get_session_messages
 
-            messages = await asyncio.to_thread(get_session_messages, session, str(self._workdir))
+            messages = await asyncio.to_thread(get_session_messages, session, str(cwd))
         except Exception:
             return False
         return bool(messages) and getattr(messages[-1], "uuid", None) == head
@@ -274,6 +298,7 @@ class ClaudeSessions:
                 "session": process.session_id,
                 "head": process.head,
                 "awaiting": list(process.awaiting),
+                "cwd": str(process.config.cwd),
             }
             # Without a reported size, nanobot falls back to its own estimate.
             if step.usage.context_tokens is not None:

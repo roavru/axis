@@ -918,6 +918,7 @@ class AgentRunner:
             "provider_context": replace(
                 provider_context or ProviderCallContext(),
                 response_preset=spec.runtime.model_preset or "",
+                working_directory=spec.workspace,
             ),
         }
 

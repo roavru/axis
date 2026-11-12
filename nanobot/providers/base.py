@@ -13,6 +13,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, cast
 from zoneinfo import ZoneInfo
 
@@ -296,6 +297,8 @@ class ProviderCallContext:
     response_is_fallback: bool = False
     # A pre-request compactor must fit this budget before sending the pending input.
     compaction_input_budget: int | None = None
+    # The conversation's project folder, for providers that run a local agent process there.
+    working_directory: Path | None = None
     # Owned by one retry chain, shared only by its provider attempts.
     compaction: ProviderCompactionEvents | None = field(default=None, repr=False, compare=False)
     on_native_compaction: Callable[[ProviderConversationState], Awaitable[None]] | None = field(

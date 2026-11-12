@@ -39,7 +39,12 @@ ISOLATION_ENV: dict[str, str] = {
     "CLAUDE_CODE_SIMPLE": "0",
     # nanobot tool calls include subagents and permission prompts that can run for a long time.
     "MCP_TOOL_TIMEOUT": str(24 * 60 * 60 * 1000),
+    # nanobot's own prompt decides what Claude knows about git.
+    "CLAUDE_CODE_DISABLE_GIT_INSTRUCTIONS": "1",
 }
+
+# A named session skips Claude Code's extra model call that writes a session title.
+SESSION_NAME = "nanobot"
 
 EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
 _EFFORT_ALIASES = {"minimal": "low"}
@@ -69,13 +74,14 @@ class ProcessConfig:
     effort: str | None
     system_prompt_file: Path
     tool_names: tuple[str, ...]
+    # Claude Code reports this folder to the model and keeps its transcripts under it.
+    cwd: Path
     connection_env: tuple[tuple[str, str], ...] = ()
 
 
 def build_options(
     config: ProcessConfig,
     *,
-    cwd: Path,
     mcp_server: Any | None,
     hooks: dict[str, Any] | None,
     session_id: str | None = None,
@@ -90,12 +96,12 @@ def build_options(
     env = {**dict(config.connection_env), **ISOLATION_ENV}
     if config.effort is not None:
         env["CLAUDE_CODE_EFFORT_LEVEL"] = config.effort
-    extra_args: dict[str, str | None] = {}
+    extra_args: dict[str, str | None] = {"name": SESSION_NAME}
     if not persist:
         extra_args["no-session-persistence"] = None
     options = ClaudeAgentOptions(
         cli_path=config.executable,
-        cwd=str(cwd),
+        cwd=str(config.cwd),
         model=config.model,
         effort=config.effort,  # type: ignore[arg-type]
         system_prompt={"type": "file", "path": str(config.system_prompt_file)},

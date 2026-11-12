@@ -351,6 +351,8 @@ Limitations:
 - `temperature`, `maxTokens` and forced tool choice are ignored. `reasoningEffort` maps to Claude Code's effort levels: `low`, `medium`, `high`, `xhigh` and `max`.
 - Claude Code runs the calls of one response one at a time; nanobot still receives and runs them as one batch.
 - A request without a session, such as the heartbeat evaluator, starts a new `claude` process and takes a few seconds longer.
+- Claude Code runs in the conversation's project folder, so the working directory it reports matches nanobot's. It writes nothing there; its transcripts stay under `~/.claude/projects`.
+- Claude Code still adds context of its own that no option removes: a line naming the Claude Agent SDK before nanobot's prompt, a reminder with the signed-in account's email address before the first message, and an environment block with the working directory, platform, shell, OS version, model name and date.
 
 ## Recipe: Kimi Coding Plan
 
